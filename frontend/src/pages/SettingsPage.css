@@ -1,0 +1,16 @@
+.settings-page { display: grid; gap: 14px; max-width: 860px; }
+.settings-card { padding: 21px; border: 1px solid #eeecf0; border-radius: 10px; background: #fff; box-shadow: 0 1px 3px #20192908; }
+.settings-card-heading { display: flex; align-items: center; gap: 11px; margin-bottom: 18px; }
+.settings-card-icon { width: 31px; height: 31px; display: grid; place-items: center; color: #765be0; border-radius: 8px; background: #f0ecfc; }
+.settings-card-heading h2 { margin: 0; color: #393541; font-size: 13px; font-weight: 650; }
+.settings-card-heading p { margin: 4px 0 0; color: #908b96; font-size: 10px; }
+.settings-form { display: grid; gap: 13px; max-width: 560px; }
+.settings-form .form-field { font-size: 10px; }
+.settings-form .form-field input, .settings-form .form-field textarea { font-size: 11px; }
+.settings-actions { display: flex; justify-content: flex-end; padding-top: 3px; }
+.settings-profile-form { grid-template-columns: repeat(2, minmax(0, 1fr)); max-width: none; }
+.settings-profile-form .settings-actions, .settings-profile-form > .field-error { grid-column: 1 / -1; }
+.settings-data-actions { display: flex; flex-wrap: wrap; gap: 9px; }
+.security-form { max-width: 430px; }
+.button-danger { color: #a64e47; background: #fff; border-color: #eed9d7; }
+.button-danger:hover { background: #fff7f6; }

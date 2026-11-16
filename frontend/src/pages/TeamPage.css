@@ -1,0 +1,5 @@
+.member-invited { color: #9a7a4c; }
+.member-invited i { background: #d7ae6f; }
+.team-view .team-view-header p { margin-bottom: 0; }
+.member-access { display: flex; align-items: center; gap: 5px; }
+.member-access select { max-width: 100px; padding: 3px 5px; color: #675f76; font: inherit; font-size: 9px; background: #fff; border: 1px solid #e8e5eb; border-radius: 5px; }
