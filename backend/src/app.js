@@ -34,6 +34,15 @@ app.use('/api', rateLimit({
   limit: 300,
   standardHeaders: 'draft-8',
   legacyHeaders: false,
+  handler(req, res) {
+    res.status(429).json({
+      error: {
+        title: 'Too many requests',
+        code: 'RATE_LIMITED',
+        message: 'Please wait a few minutes before trying again.',
+      },
+    })
+  },
 }))
 
 app.get('/api/health', (req, res) => {

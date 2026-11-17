@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Icon from '../components/Icon'
+import PasswordInput from '../components/PasswordInput'
 import './SettingsPage.css'
 
 export default function SettingsPage({
@@ -119,9 +120,9 @@ export default function SettingsPage({
       <section className="settings-card">
         <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="lock" size={17} /></span><div><h2>Account security</h2><p>Change the password that protects your Plenqora account.</p></div></div>
         <form onSubmit={changePassword} className="settings-form security-form" noValidate>
-          <label className="form-field"><span>Current password</span><input type="password" autoComplete="current-password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} /></label>
-          <label className="form-field"><span>New password</span><input type="password" autoComplete="new-password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} /></label>
-          <label className="form-field"><span>Confirm new password</span><input type="password" autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} /></label>
+          <label className="form-field"><span>Current password</span><PasswordInput autoComplete="current-password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} /></label>
+          <label className="form-field"><span>New password</span><PasswordInput autoComplete="new-password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} /></label>
+          <label className="form-field"><span>Confirm new password</span><PasswordInput autoComplete="new-password" value={passwordForm.confirmPassword} onChange={(event) => setPasswordForm({ ...passwordForm, confirmPassword: event.target.value })} /></label>
           {passwordError && <small className="field-error">{passwordError}</small>}
           <div className="settings-actions"><button type="submit" className="button button-primary" disabled={passwordBusy}>{passwordBusy ? 'Updating…' : 'Update password'}</button></div>
         </form>

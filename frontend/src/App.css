@@ -309,6 +309,10 @@
 .form-field > span b, .required-note b { color: #d87968; }
 .form-field > span small { color: #a19ca6; font-size: 9px; font-weight: 400; }
 .form-field input, .form-field textarea, .form-field select, .detail-properties select { width: 100%; min-height: 36px; padding: 8px 10px; color: #48434f; font: inherit; font-size: 10px; font-weight: 450; border: 1px solid #e8e5eb; border-radius: 6px; outline: 0; background: #fff; transition: border-color .15s, box-shadow .15s; }
+.password-input { position: relative; display: block; width: 100%; }
+.password-input > input { padding-right: 40px; }
+.password-toggle { position: absolute; top: 50%; right: 6px; display: grid; width: 28px; height: 28px; place-items: center; padding: 0; color: #827b8e; border: 0; border-radius: 5px; background: transparent; cursor: pointer; transform: translateY(-50%); }
+.password-toggle:hover { color: #6248c7; background: #f5f2fc; }
 .form-field textarea { min-height: 82px; resize: vertical; line-height: 1.55; }
 .form-field input::placeholder, .form-field textarea::placeholder { color: #b0abb5; }
 .form-field input:focus, .form-field textarea:focus, .form-field select:focus, .detail-properties select:focus { border-color: #9a84e6; box-shadow: 0 0 0 3px #886de51a; }

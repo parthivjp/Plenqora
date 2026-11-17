@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import Icon from '../components/Icon'
+import PasswordInput from '../components/PasswordInput'
 import './AuthPage.css'
 
 function isStrongPassword(password) {
@@ -109,8 +110,8 @@ export default function AuthPage({
         <form className="auth-form" onSubmit={submit} noValidate>
           {isSignup && <label className="form-field"><span>Your name</span><input autoComplete="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Taylor Morgan" maxLength={80} /></label>}
           {!isReset && <label className="form-field"><span>Email address</span><input autoFocus={!isSignup} type="email" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="you@example.com" maxLength={254} /></label>}
-          {!isForgot && <label className="form-field"><span>{isReset ? 'New password' : 'Password'}</span><input type="password" autoComplete={isSignup || isReset ? 'new-password' : 'current-password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isSignup || isReset ? '12+ characters, upper/lowercase and a number' : 'Enter your password'} maxLength={72} /></label>}
-          {(isSignup || isReset) && <label className="form-field"><span>Confirm password</span><input type="password" autoComplete="new-password" value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} placeholder="Type your password again" maxLength={72} /></label>}
+          {!isForgot && <label className="form-field"><span>{isReset ? 'New password' : 'Password'}</span><PasswordInput autoComplete={isSignup || isReset ? 'new-password' : 'current-password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isSignup || isReset ? '12+ characters, upper/lowercase and a number' : 'Enter your password'} maxLength={72} /></label>}
+          {(isSignup || isReset) && <label className="form-field"><span>Confirm password</span><PasswordInput autoComplete="new-password" value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} placeholder="Type your password again" maxLength={72} /></label>}
           {!isSignup && !isForgot && !isReset && <button type="button" className="auth-inline-link" onClick={() => onNavigate('forgot-password')}>Forgot password?</button>}
           {error && <p className="auth-error" role="alert">{error}</p>}
           {success && <p className="auth-success" role="status">{success}</p>}

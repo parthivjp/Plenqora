@@ -10,6 +10,8 @@ import clock from '../assets/icons/clock.svg'
 import close from '../assets/icons/close.svg'
 import down from '../assets/icons/down.svg'
 import download from '../assets/icons/download.svg'
+import eye from '../assets/icons/eye.svg'
+import eyeOff from '../assets/icons/eye-off.svg'
 import filter from '../assets/icons/filter.svg'
 import grid from '../assets/icons/grid.svg'
 import lock from '../assets/icons/lock.svg'
@@ -34,6 +36,8 @@ const icons = {
   close,
   down,
   download,
+  eye,
+  'eye-off': eyeOff,
   filter,
   grid,
   lock,
