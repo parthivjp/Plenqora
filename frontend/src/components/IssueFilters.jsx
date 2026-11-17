@@ -8,10 +8,17 @@ const statusOptions = [
   { value: 'progress', label: 'In progress' },
   { value: 'done', label: 'Done' },
 ]
+const sortOptions = [
+  { value: 'createdAt:desc', label: 'Newest first' },
+  { value: 'createdAt:asc', label: 'Oldest first' },
+  { value: 'title:asc', label: 'Title A–Z' },
+  { value: 'priority:desc', label: 'Priority' },
+  { value: 'status:asc', label: 'Status' },
+]
 
 export default function IssueFilters({ filters, onChange, members, onNavigate }) {
   const setFilter = (key, value) => onChange((current) => ({ ...current, [key]: value }))
-  const assigneeOptions = [{ value: 'Everyone', label: 'Everyone' }, ...members.map((member) => ({ value: member.name, label: member.name }))]
+  const assigneeOptions = [{ value: 'Everyone', label: 'Everyone' }, ...members.map((member) => ({ value: member.id, label: member.name }))]
 
   return (
     <div className="board-toolbar">
@@ -29,6 +36,7 @@ export default function IssueFilters({ filters, onChange, members, onNavigate })
         <FilterDropdown label="Filter by priority" value={filters.priority} options={priorityOptions} onChange={(value) => setFilter('priority', value)} icon="filter" />
         <FilterDropdown label="Filter by status" value={filters.status} options={statusOptions} onChange={(value) => setFilter('status', value)} className="status-select" />
         <FilterDropdown label="Filter by assignee" value={filters.assignee} options={assigneeOptions} onChange={(value) => setFilter('assignee', value)} className="assignee-select" />
+        <FilterDropdown label="Sort issues" value={`${filters.sortBy}:${filters.order}`} options={sortOptions} onChange={(value) => { const [sortBy, order] = value.split(':'); onChange((current) => ({ ...current, sortBy, order })) }} className="sort-select" />
       </div>
     </div>
   )

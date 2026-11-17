@@ -3,3 +3,4 @@
 .team-view .team-view-header p { margin-bottom: 0; }
 .member-access { display: flex; align-items: center; gap: 5px; }
 .member-access select { max-width: 100px; padding: 3px 5px; color: #675f76; font: inherit; font-size: 9px; background: #fff; border: 1px solid #e8e5eb; border-radius: 5px; }
+.member-access .text-action { padding: 0; color: #a64e47; font-size: 10px; background: transparent; border: 0; cursor: pointer; }

@@ -1,9 +1,8 @@
-import { initialMembers } from '../data/seedData'
-
 export default function Avatar({ person, size = 'normal' }) {
-  const found = initialMembers.find((item) => item.name === person?.name || item.name === person)
-    ?? (typeof person === 'object' ? person : null)
   const name = typeof person === 'string' ? person : person?.name
-  const initials = found?.initials ?? name?.split(' ').map((part) => part[0]).join('').slice(0, 2) ?? '?'
-  return <span className={`avatar avatar-${found?.color ?? 'lilac'} avatar-${size}`} aria-label={name}>{initials}</span>
+  const initials = person?.initials ?? name?.trim().split(/\s+/).filter(Boolean).map((part) => part[0]).join('').slice(0, 2).toUpperCase() ?? '?'
+  const colorNames = ['lilac', 'mint', 'peach', 'blue']
+  const hash = [...(name ?? '')].reduce((value, character) => (value * 31 + character.charCodeAt(0)) >>> 0, 0)
+  const color = person?.color ?? colorNames[hash % colorNames.length]
+  return <span className={`avatar avatar-${color} avatar-${size}`} aria-label={name}>{initials || '?'}</span>
 }

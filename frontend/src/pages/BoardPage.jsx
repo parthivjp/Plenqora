@@ -3,7 +3,8 @@ import Avatar from '../components/Avatar'
 import Icon from '../components/Icon'
 import IssueFilters from '../components/IssueFilters'
 import ProjectMetrics from '../components/ProjectMetrics'
-import { columns } from '../data/seedData'
+import { columns } from '../data/workspaceConfig'
+import { formatIssueDate } from '../utils/formatDate'
 
 export default function BoardPage({ issues, summaryIssues, members, filters, onFiltersChange, onOpenIssue, onCreateIssue, onMoveIssue, onNavigate, canEdit }) {
   const [draggedIssueId, setDraggedIssueId] = useState(null)
@@ -27,7 +28,7 @@ export default function BoardPage({ issues, summaryIssues, members, filters, onF
                     <div className="issue-card-top"><span className={`issue-type type-${issue.type.toLowerCase()}`}>{issue.type}</span>{canEdit && <button type="button" className="icon-button card-menu" aria-label={`Edit ${issue.id}`} onClick={(event) => { event.stopPropagation(); onOpenIssue(issue) }}><Icon name="more" size={17} /></button>}</div>
                     <h3>{issue.title}</h3>
                     <div className="issue-id-row"><span>{issue.id}</span><span className={`priority priority-${issue.priority.toLowerCase()}`}><i />{issue.priority}</span></div>
-                    <div className="issue-card-footer"><span className="issue-date"><Icon name="calendar" size={13} /> {issue.date}</span><Avatar person={issue.assignee} size="small" /></div>
+                    <div className="issue-card-footer"><span className="issue-date"><Icon name="calendar" size={13} /> {formatIssueDate(issue.date)}</span><Avatar person={issue.assignee} size="small" /></div>
                   </article>
                 ))}
                 {columnIssues.length === 0 && <div className="empty-column">{issues.length ? 'No matching issues' : 'A fresh start. Add an issue when you’re ready.'}</div>}
@@ -37,7 +38,7 @@ export default function BoardPage({ issues, summaryIssues, members, filters, onF
           )
         })}
         </div>
-        <div className="board-footer"><span><span className="live-dot" /> Everything is saved on this device</span><span>{issues.length} shown · {summaryIssues.length} total</span></div>
+        <div className="board-footer"><span><span className="live-dot" /> Synced with your workspace</span><span>{issues.length} shown · {summaryIssues.length} total</span></div>
       </section>
     </>
   )

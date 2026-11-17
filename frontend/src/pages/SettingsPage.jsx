@@ -2,28 +2,46 @@ import { useState } from 'react'
 import Icon from '../components/Icon'
 import './SettingsPage.css'
 
-export default function SettingsPage({ workspace, profile, isAdmin, onSaveWorkspace, onSaveProfile, onChangePassword, onReset, exportData, notify }) {
+export default function SettingsPage({
+  workspace,
+  profile,
+  projects,
+  isAdmin,
+  canManageProjects,
+  onSaveWorkspace,
+  onSaveProfile,
+  onChangePassword,
+  onEditProject,
+  onDeleteProject,
+  exportData,
+  notify,
+}) {
   const [workspaceForm, setWorkspaceForm] = useState(workspace)
   const [profileForm, setProfileForm] = useState(profile)
   const [errors, setErrors] = useState({})
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordError, setPasswordError] = useState('')
   const [passwordBusy, setPasswordBusy] = useState(false)
+  const [exportBusy, setExportBusy] = useState(false)
 
-  const saveWorkspace = (event) => {
+  const saveWorkspace = async (event) => {
     event.preventDefault()
     if (workspaceForm.name.trim().length < 2) return setErrors({ workspace: 'Workspace name must have at least 2 characters.' })
-    onSaveWorkspace({ name: workspaceForm.name.trim(), description: workspaceForm.description.trim() })
-    setErrors({})
-    notify('Workspace settings saved')
+    try {
+      await onSaveWorkspace({ name: workspaceForm.name.trim(), description: workspaceForm.description.trim() })
+      setErrors({})
+      notify('Workspace settings saved')
+    } catch (error) {
+      setErrors({ workspace: error.message })
+    }
   }
 
-  const saveProfile = (event) => {
+  const saveProfile = async (event) => {
     event.preventDefault()
     if (profileForm.name.trim().length < 2) return setErrors({ profile: 'Your name must have at least 2 characters.' })
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email.trim())) return setErrors({ profile: 'Enter a valid email address.' })
     try {
-      onSaveProfile({ name: profileForm.name.trim(), email: profileForm.email.trim() })
+      await onSaveProfile({ name: profileForm.name.trim(), email: profileForm.email.trim() })
     } catch (error) {
       return setErrors({ profile: error.message })
     }
@@ -34,7 +52,13 @@ export default function SettingsPage({ workspace, profile, isAdmin, onSaveWorksp
   const changePassword = async (event) => {
     event.preventDefault()
     setPasswordError('')
-    if (passwordForm.newPassword.length < 8) return setPasswordError('Use a new password with at least 8 characters.')
+    if (
+      passwordForm.newPassword.length < 12
+      || !/[a-z]/.test(passwordForm.newPassword)
+      || !/[A-Z]/.test(passwordForm.newPassword)
+      || !/\d/.test(passwordForm.newPassword)
+      || new TextEncoder().encode(passwordForm.newPassword).length > 72
+    ) return setPasswordError('Use at least 12 characters with uppercase, lowercase, and a number.')
     if (passwordForm.newPassword !== passwordForm.confirmPassword) return setPasswordError('The new passwords do not match.')
     setPasswordBusy(true)
     try {
@@ -51,10 +75,15 @@ export default function SettingsPage({ workspace, profile, isAdmin, onSaveWorksp
     }
   }
 
-  const reset = () => {
-    if (window.confirm('Reset your workspace to the original Plenqora sample data? Your saved changes will be removed.')) {
-      onReset()
-      notify('Workspace restored to the original sample data')
+  const handleExport = async () => {
+    setExportBusy(true)
+    try {
+      await exportData()
+      notify('Workspace data exported')
+    } catch (error) {
+      notify(error.message)
+    } finally {
+      setExportBusy(false)
     }
   }
 
@@ -69,8 +98,17 @@ export default function SettingsPage({ workspace, profile, isAdmin, onSaveWorksp
           <div className="settings-actions"><button type="submit" className="button button-primary">Save workspace</button></div>
         </form>
       </section>}
+      {canManageProjects && <section className="settings-card">
+        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="board" size={17} /></span><div><h2>Projects</h2><p>Update project details or remove a project and its issues.</p></div></div>
+        <div className="project-settings-list">{projects.map((project) => <article className="project-settings-row" key={project.id}>
+          <span className={`project-dot dot-${project.color}`} />
+          <span className="project-settings-copy"><strong>{project.name}</strong><small>{project.key} · {project.description || 'No description'}</small></span>
+          <button type="button" className="text-action" onClick={() => onEditProject(project)}>Edit</button>
+          {isAdmin && <button type="button" className="text-action project-delete-action" onClick={() => onDeleteProject(project)}>Delete</button>}
+        </article>)}</div>
+      </section>}
       <section className="settings-card">
-        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="users" size={17} /></span><div><h2>Your profile</h2><p>Update your local workspace profile.</p></div></div>
+        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="users" size={17} /></span><div><h2>Your profile</h2><p>Update your account name and email address.</p></div></div>
         <form onSubmit={saveProfile} className="settings-form settings-profile-form">
           <label className="form-field"><span>Your name</span><input value={profileForm.name} maxLength={80} onChange={(event) => setProfileForm({ ...profileForm, name: event.target.value })} /></label>
           <label className="form-field"><span>Email address</span><input type="email" value={profileForm.email} maxLength={254} onChange={(event) => setProfileForm({ ...profileForm, email: event.target.value })} /></label>
@@ -79,7 +117,7 @@ export default function SettingsPage({ workspace, profile, isAdmin, onSaveWorksp
         </form>
       </section>
       <section className="settings-card">
-        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="lock" size={17} /></span><div><h2>Account security</h2><p>Change your password for this browser-local account.</p></div></div>
+        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="lock" size={17} /></span><div><h2>Account security</h2><p>Change the password that protects your Plenqora account.</p></div></div>
         <form onSubmit={changePassword} className="settings-form security-form" noValidate>
           <label className="form-field"><span>Current password</span><input type="password" autoComplete="current-password" value={passwordForm.currentPassword} onChange={(event) => setPasswordForm({ ...passwordForm, currentPassword: event.target.value })} /></label>
           <label className="form-field"><span>New password</span><input type="password" autoComplete="new-password" value={passwordForm.newPassword} onChange={(event) => setPasswordForm({ ...passwordForm, newPassword: event.target.value })} /></label>
@@ -89,8 +127,8 @@ export default function SettingsPage({ workspace, profile, isAdmin, onSaveWorksp
         </form>
       </section>
       {isAdmin && <section className="settings-card settings-data-card">
-        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="lock" size={17} /></span><div><h2>Your data</h2><p>Your workspace is stored in this browser, not on a server.</p></div></div>
-        <div className="settings-data-actions"><button type="button" className="button button-secondary" onClick={exportData}><Icon name="download" size={15} /> Export workspace data</button><button type="button" className="button button-danger" onClick={reset}><Icon name="trash" size={15} /> Restore sample data</button></div>
+        <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="lock" size={17} /></span><div><h2>Your data</h2><p>Export your workspace data from the Plenqora server.</p></div></div>
+        <div className="settings-data-actions"><button type="button" className="button button-secondary" onClick={handleExport} disabled={exportBusy}><Icon name="download" size={15} /> {exportBusy ? 'Preparing export…' : 'Export workspace data'}</button></div>
       </section>}
     </div>
   )

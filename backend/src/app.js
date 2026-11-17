@@ -1,0 +1,54 @@
+import express from 'express'
+import mongoose from 'mongoose'
+import cookieParser from 'cookie-parser'
+import cors from 'cors'
+import helmet from 'helmet'
+import rateLimit from 'express-rate-limit'
+import authRoutes from './routes/authRoutes.js'
+import workspaceRoutes from './routes/workspaceRoutes.js'
+import projectRoutes from './routes/projectRoutes.js'
+import issueRoutes, { projectRouter as projectIssueRoutes } from './routes/issueRoutes.js'
+import csrfProtection from './middleware/csrf.js'
+import { errorHandler, notFound } from './middleware/errorHandler.js'
+
+const app = express()
+const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
+  .split(',')
+  .map((origin) => origin.trim())
+  .filter(Boolean)
+
+app.disable('x-powered-by')
+app.use(helmet())
+app.use(cors({
+  origin(origin, callback) {
+    if (!origin || allowedOrigins.includes(origin)) return callback(null, true)
+    return callback(null, false)
+  },
+  credentials: true,
+}))
+app.use(express.json({ limit: '1mb', strict: true }))
+app.use(cookieParser())
+app.use(csrfProtection)
+app.use('/api', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 300,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+}))
+
+app.get('/api/health', (req, res) => {
+  const connected = mongoose.connection.readyState === 1
+  res.status(connected ? 200 : 503).json({
+    status: connected ? 'ok' : 'unavailable',
+    database: connected ? 'connected' : 'disconnected',
+  })
+})
+app.use('/api/auth', authRoutes)
+app.use('/api/workspace', workspaceRoutes)
+app.use('/api/projects', projectRoutes)
+app.use('/api/projects/:projectId/issues', projectIssueRoutes)
+app.use('/api/issues', issueRoutes)
+app.use(notFound)
+app.use(errorHandler)
+
+export default app

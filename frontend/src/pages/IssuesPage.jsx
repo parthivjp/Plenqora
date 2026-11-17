@@ -6,7 +6,7 @@ export default function IssuesPage({ issues, members, filters, onFiltersChange, 
     <section className="board-panel">
       <IssueFilters filters={{ ...filters, view: 'issues' }} onChange={onFiltersChange} members={members} onNavigate={onNavigate} />
       <IssueTable issues={issues} onOpen={onOpenIssue} />
-      <div className="board-footer"><span><span className="live-dot" /> Everything is saved on this device</span>{canEdit && <button type="button" className="text-action" onClick={() => onCreateIssue('todo')}>Create an issue</button>}</div>
+      <div className="board-footer"><span><span className="live-dot" /> Synced with your workspace</span>{canEdit && <button type="button" className="text-action" onClick={() => onCreateIssue('todo')}>Create an issue</button>}</div>
     </section>
   )
 }

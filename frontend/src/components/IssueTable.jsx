@@ -1,4 +1,5 @@
 import Avatar from './Avatar'
+import { formatIssueDate } from '../utils/formatDate'
 
 export default function IssueTable({ issues, onOpen }) {
   return (
@@ -10,7 +11,7 @@ export default function IssueTable({ issues, onOpen }) {
           <span className={`list-status status-${issue.status}`}>{issue.status === 'todo' ? 'To do' : issue.status === 'progress' ? 'In progress' : 'Done'}</span>
           <span className={`priority priority-${issue.priority.toLowerCase()}`}><i />{issue.priority}</span>
           <span className="list-assignee"><Avatar person={issue.assignee} size="small" />{issue.assignee}</span>
-          <span className="list-date">{issue.date}</span>
+          <span className="list-date">{formatIssueDate(issue.date)}</span>
         </button>
       )) : <div className="list-empty">No issues match those filters. Try changing your search or filters.</div>}
     </div>

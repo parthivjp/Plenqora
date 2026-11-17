@@ -1,0 +1,17 @@
+.issue-comments { margin-top: 20px; padding-top: 17px; border-top: 1px solid #eeecf0; }
+.issue-comments h3 { display: flex; align-items: center; gap: 7px; margin: 0 0 13px; color: #393541; font-size: 13px; }
+.issue-comments h3 span { color: #8d8793; font-size: 11px; font-weight: 500; }
+.comments-status { color: #8d8793; font-size: 12px; }
+.comment-list { display: grid; gap: 13px; max-height: 250px; overflow: auto; }
+.comment-entry { display: grid; gap: 10px; padding-left: 12px; border-left: 2px solid #ece8f5; }
+.comment-content { min-width: 0; }
+.comment-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; color: #494452; font-size: 11px; }
+.comment-meta time { color: #918b97; font-size: 10px; }
+.comment-content p { margin: 5px 0; color: #5e5965; font-size: 12px; line-height: 1.55; white-space: pre-wrap; overflow-wrap: anywhere; }
+.comment-reply { padding: 0; color: #7058c7; font-size: 10px; background: transparent; border: 0; cursor: pointer; }
+.comment-reply-form, .comment-form { display: grid; gap: 8px; margin-top: 8px; }
+.comment-reply-form textarea, .comment-form textarea { width: 100%; padding: 9px 10px; color: #393541; font: inherit; font-size: 12px; border: 1px solid #e6e2eb; border-radius: 7px; resize: vertical; }
+.comment-reply-form > div { display: flex; justify-content: flex-end; gap: 7px; }
+.comment-reply-form .button, .comment-form .button { min-height: 32px; padding: 6px 10px; font-size: 11px; }
+.comment-form { padding-top: 12px; }
+.comment-form > button { justify-self: end; }
