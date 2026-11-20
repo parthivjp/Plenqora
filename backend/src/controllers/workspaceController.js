@@ -11,6 +11,7 @@ import { serializeIssue, serializeProject } from '../utils/serializers.js'
 import Comment from '../models/Comment.js'
 import { createInvitationEmail } from '../services/emailTemplates.js'
 import { isEmailConfigured, sendEmail } from '../services/mailer.js'
+import { subscribeToWorkspaceUpdates } from '../services/workspaceEvents.js'
 
 function workspaceDto(workspace) {
   return {
@@ -56,6 +57,36 @@ export const bootstrap = asyncHandler(async (req, res) => {
     workspace: workspaceDto(workspace),
     projects: projects.map(serializeProject),
     members,
+  })
+})
+
+export const streamEvents = asyncHandler(async (req, res) => {
+  res.status(200).set({
+    'Content-Type': 'text/event-stream; charset=utf-8',
+    'Cache-Control': 'no-cache, no-transform',
+    Connection: 'keep-alive',
+    'X-Accel-Buffering': 'no',
+  })
+  res.flushHeaders()
+  res.write('retry: 3000\n\n')
+  res.write('event: connected\ndata: {}\n\n')
+
+  const unsubscribe = subscribeToWorkspaceUpdates(req.workspace._id, () => {
+    res.write('event: workspace.updated\ndata: {}\n\n')
+  })
+  const heartbeat = setInterval(() => {
+    try {
+      res.write(': keep-alive\n\n')
+    } catch (error) {
+      console.error('[api] workspace event stream heartbeat failed', error)
+      clearInterval(heartbeat)
+      unsubscribe()
+    }
+  }, 20_000)
+
+  res.on('close', () => {
+    clearInterval(heartbeat)
+    unsubscribe()
   })
 })
 

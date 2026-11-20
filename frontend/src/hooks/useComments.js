@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { apiGet, apiPost } from '../api/client'
+import { apiGet, apiPost, subscribeToWorkspaceUpdates } from '../api/client'
 
 export function useComments(issueId) {
   const [comments, setComments] = useState([])
@@ -10,20 +10,27 @@ export function useComments(issueId) {
   useEffect(() => {
     let active = true
     if (!issueId) return () => { active = false }
-    apiGet(`/issues/${encodeURIComponent(issueId)}/comments`)
-      .then(({ comments: loadedComments }) => {
-        if (active) {
-          setComments(loadedComments)
-          setError('')
-        }
-      })
-      .catch((loadError) => {
-        if (active) setError(loadError.message)
-      })
-      .finally(() => {
-        if (active) setLoadedIssueId(issueId)
-      })
-    return () => { active = false }
+    const loadComments = () => {
+      apiGet(`/issues/${encodeURIComponent(issueId)}/comments`)
+        .then(({ comments: loadedComments }) => {
+          if (active) {
+            setComments(loadedComments)
+            setError('')
+          }
+        })
+        .catch((loadError) => {
+          if (active) setError(loadError.message)
+        })
+        .finally(() => {
+          if (active) setLoadedIssueId(issueId)
+        })
+    }
+    loadComments()
+    const unsubscribe = subscribeToWorkspaceUpdates(loadComments)
+    return () => {
+      active = false
+      unsubscribe()
+    }
   }, [issueId])
 
   const addComment = async (text, parentId = null) => {

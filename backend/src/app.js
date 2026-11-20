@@ -10,6 +10,7 @@ import projectRoutes from './routes/projectRoutes.js'
 import issueRoutes, { projectRouter as projectIssueRoutes } from './routes/issueRoutes.js'
 import csrfProtection from './middleware/csrf.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
+import { publishWorkspaceUpdate } from './services/workspaceEvents.js'
 
 const app = express()
 app.set('trust proxy', 1)
@@ -30,6 +31,19 @@ app.use(cors({
 app.use(express.json({ limit: '1mb', strict: true }))
 app.use(cookieParser())
 app.use(csrfProtection)
+app.use((req, res, next) => {
+  res.once('finish', () => {
+    if (
+      ['POST', 'PUT', 'PATCH', 'DELETE'].includes(req.method)
+      && res.statusCode >= 200
+      && res.statusCode < 300
+      && req.user?.workspaceId
+    ) {
+      publishWorkspaceUpdate(req.user.workspaceId)
+    }
+  })
+  next()
+})
 app.use('/api', rateLimit({
   windowMs: 15 * 60 * 1000,
   limit: 300,

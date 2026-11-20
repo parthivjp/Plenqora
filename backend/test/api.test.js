@@ -72,6 +72,7 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .expect(201)
   assert.equal(registration.body.user.role, 'Admin')
   assert.equal((await admin.get('/api/auth/me').expect(200)).body.user.email, 'owner@example.test')
+  await request(server).get('/api/workspace/events').expect(401)
 
   const projectResponse = await admin.post('/api/projects')
     .set('X-CSRF-Token', adminCsrf)

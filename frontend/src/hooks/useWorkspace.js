@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from '../api/client'
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost, subscribeToWorkspaceUpdates } from '../api/client'
 
 const emptyWorkspace = {
   workspace: null,
@@ -66,7 +66,14 @@ export function useWorkspace({ enabled, userId, userRole, filters }) {
         if (active) setLoadedUserId(userId)
       })
     return () => { active = false }
-  }, [enabled, userId, userRole])
+  }, [enabled, userId, userRole, refreshVersion])
+
+  useEffect(() => {
+    if (!enabled || !userId) return undefined
+    return subscribeToWorkspaceUpdates(() => {
+      setRefreshVersion((current) => current + 1)
+    })
+  }, [enabled, userId])
 
   useEffect(() => {
     if (!enabled || !userId || !activeProjectId) return undefined

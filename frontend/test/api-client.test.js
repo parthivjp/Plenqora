@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { apiGet, parseResponse } from '../src/api/client.js'
+import { apiGet, parseResponse, subscribeToWorkspaceUpdates } from '../src/api/client.js'
 
 test('a successful response with malformed JSON becomes a readable API error', async () => {
   const response = new Response('Unexpected end of JSON input', {
@@ -83,5 +83,41 @@ test('a connection failure explains how to recover without exposing browser deta
     })
   } finally {
     globalThis.fetch = originalFetch
+  }
+})
+
+test('workspace event subscription listens for updates and closes cleanly', () => {
+  const OriginalEventSource = globalThis.EventSource
+  let instance
+  class TestEventSource {
+    constructor(url, options) {
+      this.url = url
+      this.options = options
+      this.listeners = new Map()
+      this.closed = false
+      instance = this
+    }
+
+    addEventListener(name, callback) {
+      this.listeners.set(name, callback)
+    }
+
+    close() {
+      this.closed = true
+    }
+  }
+  globalThis.EventSource = TestEventSource
+
+  try {
+    let updateCount = 0
+    const unsubscribe = subscribeToWorkspaceUpdates(() => { updateCount += 1 })
+    assert.equal(instance.url, '/api/workspace/events')
+    assert.deepEqual(instance.options, { withCredentials: true })
+    instance.listeners.get('workspace.updated')()
+    assert.equal(updateCount, 1)
+    unsubscribe()
+    assert.equal(instance.closed, true)
+  } finally {
+    globalThis.EventSource = OriginalEventSource
   }
 })

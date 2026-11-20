@@ -12,6 +12,7 @@ import { serializeUser } from '../utils/serializers.js'
 import { cookieSettings, createCsrfToken } from '../middleware/csrf.js'
 import { createPasswordResetEmail } from '../services/emailTemplates.js'
 import { isEmailConfigured, sendEmail } from '../services/mailer.js'
+import { publishWorkspaceUpdate } from '../services/workspaceEvents.js'
 
 function sessionCookieAge() {
   const value = process.env.JWT_EXPIRES_IN || '30m'
@@ -67,6 +68,7 @@ export const register = asyncHandler(async (req, res) => {
       await Project.updateMany({ workspaceId: workspace._id }, { $addToSet: { members: user._id } })
       invitation.acceptedAt = new Date()
       await invitation.save()
+      publishWorkspaceUpdate(workspace._id)
       setSessionCookie(res, user._id, user.sessionVersion)
       return res.status(201).json({
         user: serializeUser(user, invitation.role),

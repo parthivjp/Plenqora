@@ -7,6 +7,7 @@ import { invitationParams, invitationBody, memberParams, roleBody, workspaceBody
 
 const router = express.Router()
 router.use(authenticate, requireWorkspaceRole())
+router.get('/events', workspace.streamEvents)
 router.get('/bootstrap', workspace.bootstrap)
 router.get('/export', requireWorkspaceRole('Admin'), workspace.exportData)
 router.patch('/', requireWorkspaceRole('Admin'), validate({ body: workspaceBody }), workspace.updateWorkspace)

@@ -165,3 +165,9 @@ export const apiDelete = (path, body) => apiRequest(path, {
   method: 'DELETE',
   ...(body === undefined ? {} : { body: JSON.stringify(body) }),
 })
+
+export function subscribeToWorkspaceUpdates(onUpdate) {
+  const eventSource = new EventSource(`${API_ROOT}/workspace/events`, { withCredentials: true })
+  eventSource.addEventListener('workspace.updated', onUpdate)
+  return () => eventSource.close()
+}
