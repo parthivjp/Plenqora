@@ -1,4 +1,6 @@
-const API_ROOT = '/api'
+const apiEnvironment = typeof import.meta.env === 'undefined' ? {} : import.meta.env
+const API_BASE_URL = (apiEnvironment.VITE_API_URL || '').replace(/\/+$/, '')
+const API_ROOT = `${API_BASE_URL}/api`
 const writeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 let csrfToken = ''
@@ -13,6 +15,9 @@ const errorTitles = {
   AUTHENTICATION_REQUIRED: 'Sign-in required',
   SESSION_EXPIRED: 'Session expired',
   INVALID_JSON: 'Request could not be read',
+  EMAIL_NOT_CONFIGURED: 'Email service unavailable',
+  EMAIL_DELIVERY_FAILED: 'Email could not be sent',
+  RESET_TOKEN_INVALID: 'Invalid or expired reset link',
 }
 
 function titleForStatus(status) {
@@ -35,6 +40,7 @@ export class ApiError extends Error {
     this.status = status
     this.code = code
     this.title = errorTitle
+    this.reason = message
   }
 }
 

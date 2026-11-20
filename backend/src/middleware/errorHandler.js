@@ -3,6 +3,9 @@ import ApiError from '../utils/ApiError.js'
 
 function titleFor(status, code) {
   if (code === 'INVALID_JSON') return 'Request could not be read'
+  if (code === 'EMAIL_NOT_CONFIGURED') return 'Email service unavailable'
+  if (code === 'EMAIL_DELIVERY_FAILED') return 'Email could not be sent'
+  if (code === 'RESET_TOKEN_INVALID') return 'Invalid or expired reset link'
   if (code === 'VALIDATION_ERROR') return 'Please check your information'
   if (code === 'INVALID_CREDENTIALS') return 'Sign-in failed'
   if (status === 401) return 'Sign-in required'

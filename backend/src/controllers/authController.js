@@ -140,10 +140,12 @@ export const updatePassword = asyncHandler(async (req, res) => {
 })
 
 export const requestPasswordReset = asyncHandler(async (req, res) => {
-  if (!isEmailConfigured()) {
+  if (!isEmailConfigured() && process.env.NODE_ENV !== 'development') {
     throw new ApiError(503, 'Password recovery is unavailable until SMTP settings are configured.', 'EMAIL_NOT_CONFIGURED')
   }
   const { email } = req.validated.body
+  let devResetUrl = null
+  const emailConfigured = isEmailConfigured()
   const user = await User.findOne({ email })
   if (user) {
     const token = crypto.randomBytes(32).toString('hex')
@@ -152,27 +154,62 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     await user.save()
     const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173'
     const resetUrl = new URL(`/reset-password?token=${token}`, origin).toString()
-    await sendEmail({
-      to: email,
-      subject: 'Reset your Plenqora password',
-      text: `Use this link within one hour to reset your password:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
-    })
+    if (emailConfigured) {
+      try {
+        await sendEmail({
+          to: email,
+          subject: 'Reset your Plenqora password',
+          text: `Use this link within one hour to reset your password:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+        })
+      } catch (error) {
+        user.resetTokenHash = undefined
+        user.resetTokenExpiresAt = undefined
+        await user.save()
+        console.error('[api] password reset email delivery failed', error)
+        throw new ApiError(503, 'The password reset email could not be sent. Please try again later.', 'EMAIL_DELIVERY_FAILED')
+      }
+    } else {
+      devResetUrl = resetUrl
+      console.warn('[api] SMTP is not configured; reset email was not sent. Use the local development link.')
+    }
   }
-  res.status(202).json({ message: 'If an account exists for this address, a password reset link has been sent.' })
+  res.status(202).json({
+    emailStatus: emailConfigured ? 'submitted' : 'not-configured',
+    message: emailConfigured
+      ? 'If an account exists for this address, a password reset link has been sent.'
+      : 'No email was sent because SMTP is not configured. For a registered local account, use the development reset link below.',
+    ...(devResetUrl ? { resetUrl: devResetUrl } : {}),
+  })
+})
+
+export const validatePasswordReset = asyncHandler(async (req, res) => {
+  const { token } = req.params
+  if (!/^[a-f\d]{64}$/i.test(token)) {
+    throw new ApiError(400, 'This password reset link is invalid or incomplete.', 'RESET_TOKEN_INVALID')
+  }
+  const user = await User.exists({
+    resetTokenHash: invitationDigest(token),
+    resetTokenExpiresAt: { $gt: new Date() },
+  })
+  if (!user) {
+    throw new ApiError(400, 'This password reset link is invalid or has expired.', 'RESET_TOKEN_INVALID')
+  }
+  res.json({ valid: true })
 })
 
 export const resetPassword = asyncHandler(async (req, res) => {
   const { token, newPassword } = req.validated.body
   if (!validatePasswordLength(newPassword)) throw new ApiError(400, 'Password must be 72 UTF-8 bytes or fewer.', 'VALIDATION_ERROR')
-  const user = await User.findOne({
+  const result = await User.updateOne({
     resetTokenHash: invitationDigest(token),
     resetTokenExpiresAt: { $gt: new Date() },
-  }).select('+resetTokenHash +resetTokenExpiresAt +sessionVersion')
-  if (!user) throw new ApiError(400, 'This password reset link is invalid or expired.', 'RESET_TOKEN_INVALID')
-  user.passwordHash = await hashPassword(newPassword)
-  user.resetTokenHash = undefined
-  user.resetTokenExpiresAt = undefined
-  user.sessionVersion += 1
-  await user.save()
+  }, {
+    $set: { passwordHash: await hashPassword(newPassword) },
+    $unset: { resetTokenHash: 1, resetTokenExpiresAt: 1 },
+    $inc: { sessionVersion: 1 },
+  })
+  if (result.matchedCount !== 1) {
+    throw new ApiError(400, 'This password reset link is invalid or expired.', 'RESET_TOKEN_INVALID')
+  }
   res.status(204).end()
 })

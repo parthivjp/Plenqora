@@ -1,10 +1,11 @@
-import { useEffect, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { apiGet, apiPatch, apiPost } from '../api/client'
 
 export function useAuth() {
   const [currentUser, setCurrentUser] = useState(null)
   const [loading, setLoading] = useState(true)
   const [connectionError, setConnectionError] = useState('')
+  const [connectionErrorTitle, setConnectionErrorTitle] = useState('')
 
   useEffect(() => {
     let active = true
@@ -14,7 +15,8 @@ export function useAuth() {
       })
       .catch((error) => {
         if (active && ![401, 403].includes(error.status)) {
-          setConnectionError(error.message || 'Unable to reach the Plenqora API.')
+          setConnectionErrorTitle(error.title || 'Unable to connect')
+          setConnectionError(error.reason || error.message || 'Unable to reach the Plenqora API.')
         }
       })
       .finally(() => {
@@ -27,6 +29,7 @@ export function useAuth() {
     const { user } = await apiPost('/auth/login', values)
     setCurrentUser(user)
     setConnectionError('')
+    setConnectionErrorTitle('')
     return user
   }
 
@@ -34,6 +37,7 @@ export function useAuth() {
     const { user } = await apiPost('/auth/register', values)
     setCurrentUser(user)
     setConnectionError('')
+    setConnectionErrorTitle('')
     return user
   }
 
@@ -56,11 +60,16 @@ export function useAuth() {
   const requestPasswordReset = ({ email }) => apiPost('/auth/forgot-password', { email })
 
   const resetPassword = ({ token, newPassword }) => apiPost('/auth/reset-password', { token, newPassword })
+  const validateResetToken = useCallback(
+    (token) => apiGet(`/auth/reset-password/${encodeURIComponent(token)}`),
+    [],
+  )
 
   return {
     currentUser,
     loading,
     connectionError,
+    connectionErrorTitle,
     login,
     register,
     logout,
@@ -68,5 +77,6 @@ export function useAuth() {
     changePassword,
     requestPasswordReset,
     resetPassword,
+    validateResetToken,
   }
 }

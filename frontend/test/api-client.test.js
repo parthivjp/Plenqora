@@ -43,6 +43,8 @@ test('structured API errors retain their user-facing title and reason', async ()
   await assert.rejects(parseResponse(response), (error) => {
     assert.match(error.message, /^Please check your information: Enter a valid email address\.$/)
     assert.equal(error.code, 'VALIDATION_ERROR')
+    assert.equal(error.title, 'Please check your information')
+    assert.equal(error.reason, 'Enter a valid email address.')
     return true
   })
 })

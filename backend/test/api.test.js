@@ -6,10 +6,17 @@ process.env.NODE_ENV = 'test'
 process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-thirty-two-characters'
 process.env.MONGODB_URI = `mongodb://127.0.0.1:27017/plenqora_test_${process.pid}_${Date.now()}`
 process.env.FRONTEND_ORIGIN = 'http://localhost:5173'
+for (const key of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM']) {
+  process.env[key] = ''
+}
 
 const [{ default: app }, { default: mongoose }] = await Promise.all([
   import('../src/app.js'),
   import('mongoose'),
+])
+const [{ default: User }, { comparePassword }] = await Promise.all([
+  import('../src/models/User.js'),
+  import('../src/utils/password.js'),
 ])
 
 let server
@@ -24,6 +31,23 @@ async function authenticatedAgent() {
   const agent = request.agent(server)
   const response = await agent.get('/api/auth/csrf').expect(200)
   return { agent, csrf: response.body.csrfToken }
+}
+
+async function withUnreachableSmtp(action) {
+  const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM']
+  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+  Object.assign(process.env, {
+    SMTP_HOST: '127.0.0.1',
+    SMTP_PORT: '1',
+    SMTP_USER: 'test@example.test',
+    SMTP_PASSWORD: 'test-only-password',
+    SMTP_FROM: 'test@example.test',
+  })
+  try {
+    return await action()
+  } finally {
+    for (const key of keys) process.env[key] = previous[key]
+  }
 }
 
 before(async () => {
@@ -100,10 +124,49 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .send({ email: 'owner@example.test' })
     .expect(503)
 
+  process.env.NODE_ENV = 'development'
+  const developmentReset = await admin.post('/api/auth/forgot-password')
+    .set('X-CSRF-Token', adminCsrf)
+    .send({ email: 'owner@example.test' })
+    .expect(202)
+  assert.equal(developmentReset.body.emailStatus, 'not-configured')
+  assert.match(developmentReset.body.message, /no email was sent/i)
+  assert.equal(typeof developmentReset.body.resetUrl, 'string')
+  const developmentResetToken = new URL(developmentReset.body.resetUrl).searchParams.get('token')
+  assert.match(developmentResetToken, /^[a-f\d]{64}$/i)
+  await admin.get(`/api/auth/reset-password/${developmentResetToken}`).expect(200)
+  process.env.NODE_ENV = 'test'
+
+  await admin.get('/api/auth/reset-password/not-a-token')
+    .expect(400)
+
+  await admin.post('/api/auth/reset-password')
+    .set('X-CSRF-Token', adminCsrf)
+    .send({ token: '0'.repeat(64), newPassword: 'StrongPassword123' })
+    .expect(400)
+
+  await withUnreachableSmtp(async () => {
+    const response = await admin.post('/api/workspace/invitations')
+      .set('X-CSRF-Token', adminCsrf)
+      .send({ email: 'delivery-failure@example.test', role: 'Viewer' })
+      .expect(503)
+    assert.equal(response.body.error.code, 'EMAIL_DELIVERY_FAILED')
+    const listed = await admin.get('/api/workspace/invitations').expect(200)
+    assert.equal(listed.body.invitations.some((entry) => entry.email === 'delivery-failure@example.test'), false)
+  })
+
   const invitationResponse = await admin.post('/api/workspace/invitations')
     .set('X-CSRF-Token', adminCsrf)
     .send({ email: 'viewer@example.test', role: 'Viewer' })
     .expect(201)
+  await withUnreachableSmtp(async () => {
+    const response = await admin.post(`/api/workspace/invitations/${invitationResponse.body.invitation.id}/resend`)
+      .set('X-CSRF-Token', adminCsrf)
+      .send({})
+      .expect(503)
+    assert.equal(response.body.error.code, 'EMAIL_DELIVERY_FAILED')
+    assert.match(response.body.error.message, /existing invitation link is still valid/i)
+  })
   const invitationToken = new URL(invitationResponse.body.invitation.inviteUrl).searchParams.get('invite')
   const viewerSession = await authenticatedAgent()
   viewer = viewerSession.agent
@@ -183,4 +246,35 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .set('X-CSRF-Token', adminCsrf)
     .expect(204)
   await admin.get('/api/auth/me').expect(401)
+
+  const resetAgent = request.agent(server)
+  const resetCsrf = (await resetAgent.get('/api/auth/csrf').expect(200)).body.csrfToken
+  await resetAgent.post('/api/auth/reset-password')
+    .set('X-CSRF-Token', resetCsrf)
+    .send({ token: developmentResetToken, newPassword: 'AnotherStrongPass456' })
+    .expect(204)
+
+  const storedUser = await User.findOne({ email: 'owner@example.test' })
+    .select('+passwordHash +resetTokenHash +resetTokenExpiresAt +sessionVersion')
+  assert.ok(storedUser)
+  assert.notEqual(storedUser.passwordHash, 'AnotherStrongPass456')
+  assert.equal(await comparePassword('AnotherStrongPass456', storedUser.passwordHash), true)
+  assert.equal(storedUser.resetTokenHash, undefined)
+  assert.equal(storedUser.resetTokenExpiresAt, undefined)
+
+  await resetAgent.post('/api/auth/reset-password')
+    .set('X-CSRF-Token', resetCsrf)
+    .send({ token: developmentResetToken, newPassword: 'YetAnotherStrong789' })
+    .expect(400)
+
+  const recoveredSession = await authenticatedAgent()
+  await recoveredSession.agent.post('/api/auth/login')
+    .set('X-CSRF-Token', recoveredSession.csrf)
+    .send({ email: 'owner@example.test', password: 'StrongPassword123' })
+    .expect(401)
+  const newPasswordSession = await authenticatedAgent()
+  await newPasswordSession.agent.post('/api/auth/login')
+    .set('X-CSRF-Token', newPasswordSession.csrf)
+    .send({ email: 'owner@example.test', password: 'AnotherStrongPass456' })
+    .expect(200)
 })

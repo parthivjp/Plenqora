@@ -232,14 +232,7 @@ export default function App() {
     }
   }
 
-  const handleInvitationCancel = async (id) => {
-    try {
-      await cancelInvitation(id)
-      notify('Invitation cancelled')
-    } catch (error) {
-      notify(error.message)
-    }
-  }
+  const handleInvitationCancel = (id) => cancelInvitation(id)
 
   const signOut = async () => {
     try {
@@ -310,7 +303,9 @@ export default function App() {
       onRegister={registerAccount}
       onRequestPasswordReset={auth.requestPasswordReset}
       onResetPassword={auth.resetPassword}
+      onValidateResetToken={auth.validateResetToken}
       connectionError={auth.connectionError}
+      connectionErrorTitle={auth.connectionErrorTitle}
     />
   }
 

@@ -16,6 +16,7 @@ const authLimiter = rateLimit({
 })
 
 router.get('/csrf', auth.csrf)
+router.get('/reset-password/:token', auth.validatePasswordReset)
 router.post('/register', authLimiter, validate({ body: registerBody }), auth.register)
 router.post('/login', authLimiter, validate({ body: loginBody }), auth.login)
 router.post('/forgot-password', authLimiter, validate({ body: forgotPasswordBody }), auth.requestPasswordReset)

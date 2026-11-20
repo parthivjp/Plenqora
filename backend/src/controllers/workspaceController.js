@@ -20,6 +20,19 @@ function workspaceDto(workspace) {
   }
 }
 
+async function sendInvitationEmail(to, workspaceName, inviteUrl) {
+  try {
+    await sendEmail({
+      to,
+      subject: `You've been invited to ${workspaceName} on Plenqora`,
+      text: `Create your account using this invitation link within seven days:\n\n${inviteUrl}`,
+    })
+  } catch (error) {
+    console.error('[api] team invitation email delivery failed', error)
+    throw error
+  }
+}
+
 export const bootstrap = asyncHandler(async (req, res) => {
   const { workspace, member } = await getWorkspaceMember(req.user)
   const projectFilter = { workspaceId: workspace._id }
@@ -121,11 +134,12 @@ export const createInvitation = asyncHandler(async (req, res) => {
   const inviteUrl = new URL(`/signup?invite=${token}`, origin).toString()
   const delivery = isEmailConfigured() ? 'email' : 'manual'
   if (delivery === 'email') {
-    await sendEmail({
-      to: email,
-      subject: `You've been invited to ${req.workspace.name} on Plenqora`,
-      text: `Create your account using this invitation link within seven days:\n\n${inviteUrl}`,
-    })
+    try {
+      await sendInvitationEmail(email, req.workspace.name, inviteUrl)
+    } catch {
+      await Invitation.deleteOne({ _id: invitation._id, workspaceId: req.workspace._id })
+      throw new ApiError(503, 'The invitation email could not be sent, so no invitation was created. Check your email settings and try again.', 'EMAIL_DELIVERY_FAILED')
+    }
   }
   res.status(201).json({
     invitation: {
@@ -157,6 +171,8 @@ export const resendInvitation = asyncHandler(async (req, res) => {
     expiresAt: { $gt: new Date() },
   })
   if (!invitation) throw new ApiError(404, 'Invitation not found or expired.', 'INVITATION_NOT_FOUND')
+  const previousTokenHash = invitation.tokenHash
+  const previousExpiresAt = invitation.expiresAt
   const token = crypto.randomBytes(32).toString('hex')
   invitation.tokenHash = crypto.createHash('sha256').update(token).digest('hex')
   invitation.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
@@ -165,11 +181,14 @@ export const resendInvitation = asyncHandler(async (req, res) => {
   const inviteUrl = new URL(`/signup?invite=${token}`, origin).toString()
   const delivery = isEmailConfigured() ? 'email' : 'manual'
   if (delivery === 'email') {
-    await sendEmail({
-      to: invitation.email,
-      subject: `You've been invited to ${req.workspace.name} on Plenqora`,
-      text: `Create your account using this invitation link within seven days:\n\n${inviteUrl}`,
-    })
+    try {
+      await sendInvitationEmail(invitation.email, req.workspace.name, inviteUrl)
+    } catch {
+      invitation.tokenHash = previousTokenHash
+      invitation.expiresAt = previousExpiresAt
+      await invitation.save()
+      throw new ApiError(503, 'The invitation email could not be sent. The existing invitation link is still valid. Check your email settings and try again.', 'EMAIL_DELIVERY_FAILED')
+    }
   }
   res.json({
     invitation: {
