@@ -10,6 +10,12 @@ export const registerBody = z.object({
   name: z.string().trim().min(2).max(80),
   email,
   password,
+  verificationToken: z.string().regex(/^[a-f\d]{64}$/i),
+  invitationToken: z.string().regex(/^[a-f\d]{64}$/i).optional(),
+}).strict()
+
+export const verifyEmailBody = z.object({
+  email,
   invitationToken: z.string().regex(/^[a-f\d]{64}$/i).optional(),
 }).strict()
 

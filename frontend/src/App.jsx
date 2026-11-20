@@ -302,7 +302,9 @@ export default function App() {
       onLogin={loginAccount}
       onRegister={registerAccount}
       onRequestPasswordReset={auth.requestPasswordReset}
+      onRequestEmailVerification={auth.requestEmailVerification}
       onResetPassword={auth.resetPassword}
+      onValidateEmailVerification={auth.validateEmailVerification}
       onValidateResetToken={auth.validateResetToken}
       connectionError={auth.connectionError}
       connectionErrorTitle={auth.connectionErrorTitle}

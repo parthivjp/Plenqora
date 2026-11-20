@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { isEmailConfigured, sendEmail } from '../src/services/mailer.js'
-import { createInvitationEmail, createPasswordResetEmail, escapeHtml } from '../src/services/emailTemplates.js'
+import { createEmailVerificationEmail, createInvitationEmail, createPasswordResetEmail, escapeHtml } from '../src/services/emailTemplates.js'
 
 const emailEnvironmentKeys = ['BREVO_API_KEY', 'BREVO_FROM']
 
@@ -121,4 +121,12 @@ test('password reset email clearly states the action and one-hour expiry', () =>
   assert.match(email.htmlContent, /Reset password/)
   assert.match(email.htmlContent, /expires in <strong>1 hour<\/strong>/)
   assert.match(email.htmlContent, /can only be used once/)
+})
+
+test('email verification message includes a secure signup link and expiry', () => {
+  const email = createEmailVerificationEmail('https://plenqora.example/signup?verify=token')
+  assert.match(email.subject, /verify/i)
+  assert.match(email.htmlContent, /Verify email address/)
+  assert.match(email.htmlContent, /30 minutes/)
+  assert.match(email.htmlContent, /https:\/\/plenqora\.example\/signup\?verify=token/)
 })

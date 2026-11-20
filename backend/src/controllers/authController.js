@@ -2,6 +2,7 @@ import crypto from 'node:crypto'
 import jwt from 'jsonwebtoken'
 import mongoose from 'mongoose'
 import Invitation from '../models/Invitation.js'
+import EmailVerification from '../models/EmailVerification.js'
 import Project from '../models/Project.js'
 import User from '../models/User.js'
 import Workspace from '../models/Workspace.js'
@@ -10,7 +11,7 @@ import asyncHandler from '../utils/asyncHandler.js'
 import { comparePassword, hashPassword, validatePasswordLength } from '../utils/password.js'
 import { serializeUser } from '../utils/serializers.js'
 import { cookieSettings, createCsrfToken } from '../middleware/csrf.js'
-import { createPasswordResetEmail } from '../services/emailTemplates.js'
+import { createEmailVerificationEmail, createPasswordResetEmail } from '../services/emailTemplates.js'
 import { isEmailConfigured, sendEmail } from '../services/mailer.js'
 import { publishWorkspaceUpdate } from '../services/workspaceEvents.js'
 
@@ -40,7 +41,7 @@ export const csrf = (req, res) => {
 }
 
 export const register = asyncHandler(async (req, res) => {
-  const { name, email, password, invitationToken } = req.validated.body
+  const { name, email, password, verificationToken, invitationToken } = req.validated.body
   if (!validatePasswordLength(password)) throw new ApiError(400, 'Password must be 72 UTF-8 bytes or fewer.', 'VALIDATION_ERROR')
   if (await User.exists({ email })) throw new ApiError(409, 'An account with this email already exists. Sign in instead.', 'EMAIL_IN_USE')
 
@@ -56,9 +57,33 @@ export const register = asyncHandler(async (req, res) => {
     throw new ApiError(400, 'This invitation is invalid or has expired.', 'INVITATION_INVALID')
   }
 
+  const emailVerification = await EmailVerification.findOne({
+    email,
+    tokenHash: invitationDigest(verificationToken),
+    expiresAt: { $gt: new Date() },
+  })
+  if (!emailVerification) {
+    throw new ApiError(400, 'Verify your email address using the link we sent before creating your account.', 'EMAIL_VERIFICATION_INVALID')
+  }
+
   const workspaceId = invitation?.workspaceId ?? new mongoose.Types.ObjectId()
   const user = new User({ name, email, passwordHash: await hashPassword(password), workspaceId })
   await user.save()
+  try {
+    const consumedVerification = await EmailVerification.findOneAndDelete({
+      _id: emailVerification._id,
+      email,
+      tokenHash: invitationDigest(verificationToken),
+      expiresAt: { $gt: new Date() },
+    })
+    if (!consumedVerification) {
+      throw new ApiError(400, 'This email verification link has already been used or has expired.', 'EMAIL_VERIFICATION_INVALID')
+    }
+  } catch (error) {
+    await User.deleteOne({ _id: user._id })
+    throw error
+  }
+
   try {
     if (invitation) {
       const workspace = await Workspace.findById(invitation.workspaceId)
@@ -88,6 +113,75 @@ export const register = asyncHandler(async (req, res) => {
     await User.deleteOne({ _id: user._id })
     throw error
   }
+})
+
+export const requestEmailVerification = asyncHandler(async (req, res) => {
+  const emailConfigured = isEmailConfigured()
+  const canShowDevelopmentLink = ['development', 'test'].includes(process.env.NODE_ENV)
+  if (!emailConfigured && !canShowDevelopmentLink) {
+    throw new ApiError(503, 'Email verification is unavailable until Brevo email settings are configured.', 'EMAIL_NOT_CONFIGURED')
+  }
+
+  const { email, invitationToken } = req.validated.body
+  if (invitationToken) {
+    const invitation = await Invitation.exists({
+      tokenHash: invitationDigest(invitationToken),
+      email,
+      expiresAt: { $gt: new Date() },
+      acceptedAt: null,
+    })
+    if (!invitation) {
+      throw new ApiError(400, 'This invitation is invalid or has expired.', 'INVITATION_INVALID')
+    }
+  }
+
+  await EmailVerification.deleteMany({ email })
+
+  const token = crypto.randomBytes(32).toString('hex')
+  const verification = await EmailVerification.create({
+    email,
+    tokenHash: invitationDigest(token),
+    expiresAt: new Date(Date.now() + 30 * 60 * 1000),
+  })
+  const origin = process.env.FRONTEND_ORIGIN || 'https://plenqora.vercel.app'
+  const verificationUrl = new URL(`/signup?verify=${token}`, origin)
+  if (invitationToken) verificationUrl.searchParams.set('invite', invitationToken)
+
+  if (emailConfigured) {
+    try {
+      await sendEmail({
+        to: email,
+        ...createEmailVerificationEmail(verificationUrl.toString()),
+      })
+    } catch (error) {
+      await EmailVerification.deleteOne({ _id: verification._id })
+      console.error('[api] email verification delivery failed', error)
+      throw new ApiError(503, 'The verification email could not be sent. Please try again later.', 'EMAIL_DELIVERY_FAILED')
+    }
+  }
+
+  res.status(202).json({
+    emailStatus: emailConfigured ? 'submitted' : 'not-configured',
+    message: emailConfigured
+      ? 'Check your inbox for a link to verify your email and finish creating your account.'
+      : 'No email was sent because Brevo is not configured. Open the local development link below to verify your email.',
+    ...(!emailConfigured ? { verificationUrl: verificationUrl.toString() } : {}),
+  })
+})
+
+export const validateEmailVerification = asyncHandler(async (req, res) => {
+  const { token } = req.params
+  if (!/^[a-f\d]{64}$/i.test(token)) {
+    throw new ApiError(400, 'This email verification link is invalid or incomplete.', 'EMAIL_VERIFICATION_INVALID')
+  }
+  const verification = await EmailVerification.findOne({
+    tokenHash: invitationDigest(token),
+    expiresAt: { $gt: new Date() },
+  })
+  if (!verification) {
+    throw new ApiError(400, 'This email verification link is invalid or has expired.', 'EMAIL_VERIFICATION_INVALID')
+  }
+  res.json({ valid: true, email: verification.email })
 })
 
 export const login = asyncHandler(async (req, res) => {

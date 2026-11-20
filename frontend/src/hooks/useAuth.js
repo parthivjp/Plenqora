@@ -58,8 +58,13 @@ export function useAuth() {
   })
 
   const requestPasswordReset = ({ email }) => apiPost('/auth/forgot-password', { email })
+  const requestEmailVerification = (values) => apiPost('/auth/verify-email', values)
 
   const resetPassword = ({ token, newPassword }) => apiPost('/auth/reset-password', { token, newPassword })
+  const validateEmailVerification = useCallback(
+    (token) => apiGet(`/auth/verify-email/${encodeURIComponent(token)}`),
+    [],
+  )
   const validateResetToken = useCallback(
     (token) => apiGet(`/auth/reset-password/${encodeURIComponent(token)}`),
     [],
@@ -76,7 +81,9 @@ export function useAuth() {
     updateProfile,
     changePassword,
     requestPasswordReset,
+    requestEmailVerification,
     resetPassword,
+    validateEmailVerification,
     validateResetToken,
   }
 }

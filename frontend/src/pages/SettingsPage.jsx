@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import Icon from '../components/Icon'
 import PasswordInput from '../components/PasswordInput'
+import { validateEmail } from '../utils/emailValidator'
 import './SettingsPage.css'
 
 export default function SettingsPage({
@@ -19,6 +20,7 @@ export default function SettingsPage({
 }) {
   const [workspaceForm, setWorkspaceForm] = useState(workspace)
   const [profileForm, setProfileForm] = useState(profile)
+  const [emailValidation, setEmailValidation] = useState(null)
   const [errors, setErrors] = useState({})
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirmPassword: '' })
   const [passwordError, setPasswordError] = useState('')
@@ -39,10 +41,13 @@ export default function SettingsPage({
 
   const saveProfile = async (event) => {
     event.preventDefault()
+    const emailResult = validateEmail(profileForm.email)
+    setEmailValidation(emailResult)
+    setProfileForm((current) => ({ ...current, email: emailResult.email }))
+    if (!emailResult.valid) return
     if (profileForm.name.trim().length < 2) return setErrors({ profile: 'Your name must have at least 2 characters.' })
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profileForm.email.trim())) return setErrors({ profile: 'Enter a valid email address.' })
     try {
-      await onSaveProfile({ name: profileForm.name.trim(), email: profileForm.email.trim() })
+      await onSaveProfile({ name: profileForm.name.trim(), email: emailResult.email })
     } catch (error) {
       return setErrors({ profile: error.message })
     }
@@ -112,7 +117,7 @@ export default function SettingsPage({
         <div className="settings-card-heading"><span className="settings-card-icon"><Icon name="users" size={17} /></span><div><h2>Your profile</h2><p>Update your account name and email address.</p></div></div>
         <form onSubmit={saveProfile} className="settings-form settings-profile-form">
           <label className="form-field"><span>Your name</span><input value={profileForm.name} maxLength={80} onChange={(event) => setProfileForm({ ...profileForm, name: event.target.value })} /></label>
-          <label className="form-field"><span>Email address</span><input type="email" value={profileForm.email} maxLength={254} onChange={(event) => setProfileForm({ ...profileForm, email: event.target.value })} /></label>
+          <label className="form-field"><span>Email address</span><input type="email" value={profileForm.email} maxLength={254} onChange={(event) => { setProfileForm({ ...profileForm, email: event.target.value }); setEmailValidation(null); setErrors((current) => ({ ...current, profile: '' })) }} onBlur={() => { const result = validateEmail(profileForm.email); setEmailValidation(result); setProfileForm((current) => ({ ...current, email: result.email })) }} aria-invalid={Boolean(emailValidation && !emailValidation.valid)} aria-describedby={emailValidation && !emailValidation.valid ? 'profile-email-error' : undefined} />{emailValidation && !emailValidation.valid && <small id="profile-email-error" className="field-error" role="alert">{emailValidation.error}{emailValidation.suggestion && <> <button type="button" className="text-action" onClick={() => { setProfileForm((current) => ({ ...current, email: emailValidation.suggestion })); setEmailValidation(null) }}>Use this</button></>}</small>}</label>
           {errors.profile && <small className="field-error">{errors.profile}</small>}
           <div className="settings-actions"><button type="submit" className="button button-primary">Save profile</button></div>
         </form>

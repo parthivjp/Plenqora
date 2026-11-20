@@ -97,4 +97,17 @@ ${callToAction(resetUrl, 'Reset password')}
   }
 }
 
+export function createEmailVerificationEmail(verificationUrl) {
+  return {
+    subject: 'Verify your Plenqora email address',
+    htmlContent: emailLayout({
+      preheader: 'Verify your email address',
+      title: 'Verify your email',
+      content: `<p style="margin:0;">Click the button below to verify this email address and finish creating your Plenqora account.</p>
+${callToAction(verificationUrl, 'Verify email address')}
+<p style="margin:22px 0 0;padding-top:18px;border-top:1px solid #eeecf2;color:#777382;font-size:13px;">This link expires in <strong>30 minutes</strong> and can only be used once. If you didn’t start creating a Plenqora account, you can safely ignore this email.</p>`,
+    }),
+  }
+}
+
 export { escapeHtml }

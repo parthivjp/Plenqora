@@ -18,6 +18,7 @@ const [{ default: User }, { comparePassword }] = await Promise.all([
   import('../src/models/User.js'),
   import('../src/utils/password.js'),
 ])
+const { default: EmailVerification } = await import('../src/models/EmailVerification.js')
 
 let server
 let admin
@@ -31,6 +32,29 @@ async function authenticatedAgent() {
   const agent = request.agent(server)
   const response = await agent.get('/api/auth/csrf').expect(200)
   return { agent, csrf: response.body.csrfToken }
+}
+
+async function registerWithEmailVerification(agent, csrf, values) {
+  const verificationRequest = await agent.post('/api/auth/verify-email')
+    .set('X-CSRF-Token', csrf)
+    .send({
+      email: values.email,
+      ...(values.invitationToken ? { invitationToken: values.invitationToken } : {}),
+    })
+    .expect(202)
+  const verificationToken = new URL(verificationRequest.body.verificationUrl).searchParams.get('verify')
+  assert.match(verificationToken, /^[a-f\d]{64}$/i)
+  const verification = await agent.get(`/api/auth/verify-email/${verificationToken}`).expect(200)
+  assert.equal(verification.body.email, values.email)
+
+  const registration = await agent.post('/api/auth/register')
+    .set('X-CSRF-Token', csrf)
+    .send({ ...values, verificationToken })
+    .expect(201)
+  const reusedLink = await agent.get(`/api/auth/verify-email/${verificationToken}`).expect(400)
+  assert.equal(reusedLink.body.error.code, 'EMAIL_VERIFICATION_INVALID')
+  assert.equal(reusedLink.body.error.title, 'Email verification link invalid')
+  return registration
 }
 
 async function withRejectedEmailDelivery(action) {
@@ -66,10 +90,28 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
   admin = ownerSession.agent
   adminCsrf = ownerSession.csrf
 
-  const registration = await admin.post('/api/auth/register')
+  const unverifiedRegistration = await admin.post('/api/auth/register')
     .set('X-CSRF-Token', adminCsrf)
-    .send({ name: 'Workspace Owner', email: 'owner@example.test', password: 'StrongPassword123' })
-    .expect(201)
+    .send({ name: 'Unverified Owner', email: 'unverified@example.test', password: 'StrongPassword123' })
+    .expect(400)
+  assert.equal(unverifiedRegistration.body.error.code, 'VALIDATION_ERROR')
+  assert.equal(unverifiedRegistration.body.error.title, 'Please check your information')
+
+  await withRejectedEmailDelivery(async () => {
+    const failedVerificationEmail = await admin.post('/api/auth/verify-email')
+      .set('X-CSRF-Token', adminCsrf)
+      .send({ email: 'delivery-failure@example.test' })
+      .expect(503)
+    assert.equal(failedVerificationEmail.body.error.code, 'EMAIL_DELIVERY_FAILED')
+    assert.equal(failedVerificationEmail.body.error.title, 'Email could not be sent')
+    assert.equal(await EmailVerification.countDocuments({ email: 'delivery-failure@example.test' }), 0)
+  })
+
+  const registration = await registerWithEmailVerification(admin, adminCsrf, {
+    name: 'Workspace Owner',
+    email: 'owner@example.test',
+    password: 'StrongPassword123',
+  })
   assert.equal(registration.body.user.role, 'Admin')
   assert.equal((await admin.get('/api/auth/me').expect(200)).body.user.email, 'owner@example.test')
   await request(server).get('/api/workspace/events').expect(401)
@@ -203,15 +245,12 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
   const viewerSession = await authenticatedAgent()
   viewer = viewerSession.agent
   viewerCsrf = viewerSession.csrf
-  const viewerRegistration = await viewer.post('/api/auth/register')
-    .set('X-CSRF-Token', viewerCsrf)
-    .send({
-      name: 'Read Only',
-      email: 'viewer@example.test',
-      password: 'StrongPassword123',
-      invitationToken,
-    })
-    .expect(201)
+  const viewerRegistration = await registerWithEmailVerification(viewer, viewerCsrf, {
+    name: 'Read Only',
+    email: 'viewer@example.test',
+    password: 'StrongPassword123',
+    invitationToken,
+  })
   assert.equal(viewerRegistration.body.user.role, 'Viewer')
   const viewerId = viewerRegistration.body.user.id
   assert.equal((await viewer.get(`/api/projects/${project.id}/issues`).expect(200)).body.issues.length, 2)
@@ -256,10 +295,11 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
   const outsiderSession = await authenticatedAgent()
   const outsider = outsiderSession.agent
   const outsiderCsrf = outsiderSession.csrf
-  await outsider.post('/api/auth/register')
-    .set('X-CSRF-Token', outsiderCsrf)
-    .send({ name: 'Other Owner', email: 'other@example.test', password: 'StrongPassword123' })
-    .expect(201)
+  await registerWithEmailVerification(outsider, outsiderCsrf, {
+    name: 'Other Owner',
+    email: 'other@example.test',
+    password: 'StrongPassword123',
+  })
   const outsiderProject = await outsider.post('/api/projects')
     .set('X-CSRF-Token', outsiderCsrf)
     .send({ name: 'Separate API Project', key: 'PLN', description: '' })

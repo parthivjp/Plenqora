@@ -11,6 +11,7 @@ import issueRoutes, { projectRouter as projectIssueRoutes } from './routes/issue
 import csrfProtection from './middleware/csrf.js'
 import { errorHandler, notFound } from './middleware/errorHandler.js'
 import { publishWorkspaceUpdate } from './services/workspaceEvents.js'
+import { checkEmail } from './utils/emailCheck.server.js'
 
 const app = express()
 app.set('trust proxy', 1)
@@ -59,6 +60,15 @@ app.use('/api', rateLimit({
     })
   },
 }))
+app.post('/api/validate-email', rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 30,
+  standardHeaders: 'draft-8',
+  legacyHeaders: false,
+  message: { error: { code: 'EMAIL_VALIDATION_RATE_LIMITED', message: 'Too many email checks. Try again later.' } },
+}), async (req, res) => {
+  res.json(await checkEmail(req.body?.email))
+})
 
 app.get('/api/health', (req, res) => {
   const connected = mongoose.connection.readyState === 1

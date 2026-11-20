@@ -67,6 +67,25 @@ test('workspace export API errors have a feature-specific title', async () => {
   })
 })
 
+test('email verification API errors keep their specific user-facing title', async () => {
+  const response = new Response(JSON.stringify({
+    error: {
+      code: 'EMAIL_VERIFICATION_INVALID',
+      message: 'This email verification link is invalid or has expired.',
+    },
+  }), {
+    status: 400,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  await assert.rejects(parseResponse(response), (error) => {
+    assert.equal(error.code, 'EMAIL_VERIFICATION_INVALID')
+    assert.equal(error.title, 'Email verification link invalid')
+    assert.equal(error.reason, 'This email verification link is invalid or has expired.')
+    return true
+  })
+})
+
 test('a connection failure explains how to recover without exposing browser details', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => {

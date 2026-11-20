@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import Icon from '../components/Icon'
 import PasswordInput from '../components/PasswordInput'
+import { validateEmail } from '../utils/emailValidator'
 import './AuthPage.css'
 
 function isStrongPassword(password) {
@@ -17,25 +18,40 @@ export default function AuthPage({
   onLogin,
   onRegister,
   onRequestPasswordReset,
+  onRequestEmailVerification,
   onResetPassword,
+  onValidateEmailVerification,
   onValidateResetToken,
   connectionError,
   connectionErrorTitle,
 }) {
   const [form, setForm] = useState({ name: '', email: '', password: '', confirmPassword: '' })
+  const [emailValidation, setEmailValidation] = useState(null)
   const [error, setError] = useState('')
   const [errorTitle, setErrorTitle] = useState('')
   const [success, setSuccess] = useState('')
   const [successTitle, setSuccessTitle] = useState('')
   const [resetUrl, setResetUrl] = useState('')
+  const [verificationUrl, setVerificationUrl] = useState('')
   const [busy, setBusy] = useState(false)
   const search = new URLSearchParams(window.location.search)
   const invitationToken = search.get('invite') || ''
   const resetToken = search.get('token') || ''
+  const emailVerificationToken = search.get('verify') || ''
   const isSignup = mode === 'signup'
   const isForgot = mode === 'forgot-password'
   const isReset = mode === 'reset-password'
   const [resetStatus, setResetStatus] = useState(isReset && resetToken ? 'checking' : isReset ? 'invalid' : 'idle')
+  const [emailVerification, setEmailVerification] = useState({
+    token: emailVerificationToken,
+    status: isSignup && emailVerificationToken ? 'checking' : 'idle',
+    error: '',
+  })
+  const [verificationAttempt, setVerificationAttempt] = useState(0)
+  const emailVerificationStatus = emailVerification.token === emailVerificationToken
+    ? emailVerification.status
+    : emailVerificationToken ? 'checking' : 'idle'
+  const isVerifiedSignup = isSignup && emailVerificationToken && emailVerificationStatus === 'valid'
 
   useEffect(() => {
     if (!isReset) return
@@ -56,21 +72,62 @@ export default function AuthPage({
     return () => { active = false }
   }, [isReset, resetToken, onValidateResetToken])
 
+  useEffect(() => {
+    if (!isSignup || !emailVerificationToken) return undefined
+
+    let active = true
+    onValidateEmailVerification(emailVerificationToken)
+      .then(({ email }) => {
+        if (!active) return
+        const result = validateEmail(email)
+        if (!result.valid) {
+          setEmailVerification({
+            token: emailVerificationToken,
+            status: 'invalid',
+            error: 'The verified email address is no longer valid. Request a new verification link.',
+          })
+          return
+        }
+        setEmailVerification({ token: emailVerificationToken, status: 'valid', error: '' })
+        setEmailValidation(result)
+        setForm((current) => ({ ...current, email: result.email }))
+      })
+      .catch((verificationError) => {
+        if (!active) return
+        const invalidLink = verificationError.status === 400
+          || verificationError.code === 'EMAIL_VERIFICATION_INVALID'
+        setEmailVerification({
+          token: emailVerificationToken,
+          status: invalidLink ? 'invalid' : 'error',
+          error: invalidLink
+            ? verificationError.reason || 'This email verification link is invalid or has expired.'
+            : verificationError.reason || verificationError.message || 'We could not check this link. Check your connection and try again.',
+        })
+      })
+    return () => { active = false }
+  }, [isSignup, emailVerificationToken, onValidateEmailVerification, verificationAttempt])
+
   const submit = async (event) => {
     event.preventDefault()
     setError('')
     setErrorTitle('')
     setSuccess('')
     setSuccessTitle('')
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim()) && !isReset) {
-      setErrorTitle('Please check your information')
-      return setError('Enter a valid email address.')
+    setResetUrl('')
+    setVerificationUrl('')
+    let validatedEmail = ''
+    if (!isReset) {
+      const emailResult = validateEmail(form.email)
+      setEmailValidation(emailResult)
+      setForm((current) => ({ ...current, email: emailResult.email }))
+      if (!emailResult.valid) return
+      validatedEmail = emailResult.email
     }
-    if (isSignup && form.name.trim().length < 2) {
+    if (isVerifiedSignup && form.name.trim().length < 2) {
       setErrorTitle('Please check your information')
       return setError('Enter your name.')
     }
-    if (isSignup || isReset) {
+    if (isVerifiedSignup || isReset) {
       if (!isStrongPassword(form.password)) {
         setErrorTitle('Please check your information')
         return setError('Use at least 12 characters with uppercase, lowercase, and a number.')
@@ -80,7 +137,7 @@ export default function AuthPage({
         return setError('The passwords do not match.')
       }
     }
-    if (!isForgot && !isReset && !form.password) {
+    if (!isForgot && !isReset && (!isSignup || isVerifiedSignup) && !form.password) {
       setErrorTitle('Please check your information')
       return setError('Enter your password.')
     }
@@ -98,10 +155,18 @@ export default function AuthPage({
     setBusy(true)
     try {
       if (isForgot) {
-        const response = await onRequestPasswordReset({ email: form.email.trim() })
+        const response = await onRequestPasswordReset({ email: validatedEmail })
         setResetUrl(response?.resetUrl || '')
         setSuccessTitle(response?.emailStatus === 'not-configured' ? 'Email not sent' : 'Request submitted')
         setSuccess(response?.message || 'Password reset request completed.')
+      } else if (isSignup && !emailVerificationToken) {
+        const response = await onRequestEmailVerification({
+          email: validatedEmail,
+          ...(invitationToken ? { invitationToken } : {}),
+        })
+        setVerificationUrl(response?.verificationUrl || '')
+        setSuccessTitle(response?.emailStatus === 'not-configured' ? 'Development verification link' : 'Check your email')
+        setSuccess(response?.message || 'Follow the verification link to finish creating your account.')
       } else if (isReset) {
         await onResetPassword({ token: resetToken, newPassword: form.password })
         setSuccess('Your password has been updated. You can now sign in.')
@@ -111,18 +176,19 @@ export default function AuthPage({
         const account = isSignup
           ? await onRegister({
             name: form.name.trim(),
-            email: form.email.trim(),
+            email: validatedEmail,
             password: form.password,
+            verificationToken: emailVerificationToken,
             ...(invitationToken ? { invitationToken } : {}),
           })
-          : await onLogin({ email: form.email.trim(), password: form.password })
+          : await onLogin({ email: validatedEmail, password: form.password })
         onNavigate('board')
         return account
       }
       return null
     } catch (authError) {
-      setErrorTitle(authError.title || 'Sign-in failed')
-      setError(authError.reason || authError.message)
+      setErrorTitle(authError.title || (isSignup ? 'Account creation failed' : isForgot ? 'Password reset failed' : isReset ? 'Password update failed' : 'Sign-in failed'))
+      setError(authError.reason || authError.message || 'Please try again.')
       return null
     } finally {
       setBusy(false)
@@ -137,7 +203,9 @@ export default function AuthPage({
         ? 'Choose a new password'
         : 'Welcome back'
   const description = isSignup
-    ? invitationToken ? 'Accept your invitation and join your team.' : 'Create a private workspace for your projects.'
+    ? isVerifiedSignup
+      ? invitationToken ? 'Your email is verified. Complete signup to join your team.' : 'Your email is verified. Complete signup to create your workspace.'
+      : invitationToken ? 'Enter your email to verify it and accept the invitation.' : 'Enter your email to start creating a private workspace.'
     : isForgot
     ? 'Request a secure, time-limited link to reset your password.'
       : isReset
@@ -163,9 +231,10 @@ export default function AuthPage({
         )}
         {isSignup && invitationToken && <p className="auth-security-note"><Icon name="users" size={15} /> This secure invitation assigns your workspace role after signup.</p>}
         {isReset && (!resetToken || resetStatus === 'invalid') && (
-          <p className="auth-status auth-status-invalid" role="alert">
-            This reset link is missing, invalid, or expired. Request a new link from the sign-in page.
-          </p>
+          <div className="auth-status auth-status-invalid" role="alert">
+            <p>{!resetToken ? 'This reset link is missing.' : 'This reset link is invalid or expired.'} Request a new link from the sign-in page.</p>
+            {error && <p><strong>{errorTitle || 'Reset link error'}:</strong> {error}</p>}
+          </div>
         )}
         {isReset && resetToken && (resetStatus === 'checking' || resetStatus === 'idle') && (
           <p className="auth-status" role="status">Checking that this password reset link is valid…</p>
@@ -173,11 +242,24 @@ export default function AuthPage({
         {isReset && resetStatus === 'completed' && (
           <p className="auth-success" role="status">Your password has been updated. You can now sign in.</p>
         )}
-        {(!isReset || resetStatus === 'valid') && <form className="auth-form" onSubmit={submit} noValidate>
-          {isSignup && <label className="form-field"><span>Your name</span><input autoComplete="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Taylor Morgan" maxLength={80} /></label>}
-          {!isReset && <label className="form-field"><span>Email address</span><input autoFocus={!isSignup} type="email" autoComplete="email" value={form.email} onChange={(event) => setForm({ ...form, email: event.target.value })} placeholder="you@example.com" maxLength={254} /></label>}
-          {!isForgot && <label className="form-field"><span>{isReset ? 'New password' : 'Password'}</span><PasswordInput autoComplete={isSignup || isReset ? 'new-password' : 'current-password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isSignup || isReset ? '12+ characters, upper/lowercase and a number' : 'Enter your password'} maxLength={72} /></label>}
-          {(isSignup || isReset) && <label className="form-field"><span>Confirm password</span><PasswordInput autoComplete="new-password" value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} placeholder="Type your password again" maxLength={72} /></label>}
+        {isSignup && emailVerificationToken && emailVerificationStatus === 'checking' && (
+          <p className="auth-status" role="status">Checking your email verification link…</p>
+        )}
+        {isSignup && emailVerificationToken && emailVerificationStatus === 'invalid' && (
+          <p className="auth-status auth-status-invalid" role="alert">
+            {emailVerification.error || 'This email verification link is invalid or has expired.'} <button type="button" className="text-action" onClick={() => onNavigate('signup')}>Request another link</button>
+          </p>
+        )}
+        {isSignup && emailVerificationToken && emailVerificationStatus === 'error' && (
+          <p className="auth-status auth-status-invalid" role="alert">
+            <strong>Could not check verification link:</strong> {emailVerification.error} <button type="button" className="text-action" onClick={() => { setEmailVerification({ token: emailVerificationToken, status: 'checking', error: '' }); setVerificationAttempt((attempt) => attempt + 1) }}>Try again</button>
+          </p>
+        )}
+        {(!isReset || resetStatus === 'valid') && (!isSignup || !emailVerificationToken || emailVerificationStatus === 'valid') && <form className="auth-form" onSubmit={submit} noValidate>
+          {isVerifiedSignup && <label className="form-field"><span>Your name</span><input autoComplete="name" value={form.name} onChange={(event) => setForm({ ...form, name: event.target.value })} placeholder="e.g. Taylor Morgan" maxLength={80} /></label>}
+          {!isReset && <label className="form-field"><span>Email address</span><input autoFocus={!isSignup || !emailVerificationToken} type="email" autoComplete="email" value={form.email} readOnly={Boolean(emailVerificationToken)} onChange={(event) => { setForm({ ...form, email: event.target.value }); setEmailValidation(null) }} onBlur={() => { const result = validateEmail(form.email); setEmailValidation(result); setForm((current) => ({ ...current, email: result.email })) }} placeholder="you@example.com" maxLength={254} aria-invalid={Boolean(emailValidation && !emailValidation.valid)} aria-describedby={emailValidation && !emailValidation.valid ? 'auth-email-error' : undefined} />{emailValidation && !emailValidation.valid && <small id="auth-email-error" className="auth-error" role="alert">{emailValidation.error}{emailValidation.suggestion && <> <button type="button" className="text-action" onClick={() => { setForm((current) => ({ ...current, email: emailValidation.suggestion })); setEmailValidation(null) }}>Use this</button></>}</small>}</label>}
+          {!isForgot && (!isSignup || isVerifiedSignup) && <label className="form-field"><span>{isReset ? 'New password' : 'Password'}</span><PasswordInput autoComplete={isSignup || isReset ? 'new-password' : 'current-password'} value={form.password} onChange={(event) => setForm({ ...form, password: event.target.value })} placeholder={isSignup || isReset ? '12+ characters, upper/lowercase and a number' : 'Enter your password'} maxLength={72} /></label>}
+          {(isVerifiedSignup || isReset) && <label className="form-field"><span>Confirm password</span><PasswordInput autoComplete="new-password" value={form.confirmPassword} onChange={(event) => setForm({ ...form, confirmPassword: event.target.value })} placeholder="Type your password again" maxLength={72} /></label>}
           {!isSignup && !isForgot && !isReset && <button type="button" className="auth-inline-link" onClick={() => onNavigate('forgot-password')}>Forgot password?</button>}
           {error && (
             <p className="auth-error" role="alert">
@@ -191,9 +273,12 @@ export default function AuthPage({
               {resetUrl && (
                 <a className="auth-reset-link" href={resetUrl}>Open password reset page</a>
               )}
+              {verificationUrl && (
+                <a className="auth-reset-link" href={verificationUrl}>Open email verification link</a>
+              )}
             </div>
           )}
-          <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isSignup ? 'Create account' : isForgot ? 'Send reset link' : isReset ? 'Update password' : 'Sign in'}</button>
+          <button type="submit" className="button button-primary auth-submit" disabled={busy}>{busy ? 'Please wait…' : isSignup ? emailVerificationToken ? 'Create account' : 'Send verification link' : isForgot ? 'Send reset link' : isReset ? 'Update password' : 'Sign in'}</button>
         </form>}
         <div className="auth-switch">
           {isSignup
