@@ -3,6 +3,7 @@ import express from 'express'
 import request from 'supertest'
 import { test } from 'node:test'
 import ApiError from '../src/utils/ApiError.js'
+import app from '../src/app.js'
 import { errorHandler } from '../src/middleware/errorHandler.js'
 
 test('malformed JSON receives a structured, user-readable error', async () => {
@@ -53,4 +54,19 @@ test('workspace export failures use a feature-specific error label', async () =>
   assert.equal(response.body.error.code, 'WORKSPACE_EXPORT_FAILED')
   assert.equal(response.body.error.title, 'Workspace export failed')
   assert.equal(response.body.error.message, 'Workspace data could not be exported. Please try again.')
+})
+
+test('requests forwarded by Render do not trigger the rate-limit proxy validation warning', async () => {
+  const loggedErrors = []
+  const originalConsoleError = console.error
+  console.error = (...args) => loggedErrors.push(args.join(' '))
+  try {
+    await request(app)
+      .get('/api/not-a-route')
+      .set('X-Forwarded-For', '198.51.100.25')
+      .expect(404)
+  } finally {
+    console.error = originalConsoleError
+  }
+  assert.equal(loggedErrors.some((entry) => entry.includes('ERR_ERL_UNEXPECTED_X_FORWARDED_FOR')), false)
 })

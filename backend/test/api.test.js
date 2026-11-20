@@ -6,7 +6,7 @@ process.env.NODE_ENV = 'test'
 process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-thirty-two-characters'
 process.env.MONGODB_URI = `mongodb://127.0.0.1:27017/plenqora_test_${process.pid}_${Date.now()}`
 process.env.FRONTEND_ORIGIN = 'http://localhost:5173'
-for (const key of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM']) {
+for (const key of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM', 'RESEND_API_KEY', 'RESEND_FROM']) {
   process.env[key] = ''
 }
 
@@ -34,7 +34,7 @@ async function authenticatedAgent() {
 }
 
 async function withUnreachableSmtp(action) {
-  const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM']
+  const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM', 'RESEND_API_KEY', 'RESEND_FROM']
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
   Object.assign(process.env, {
     SMTP_HOST: '127.0.0.1',
@@ -42,6 +42,8 @@ async function withUnreachableSmtp(action) {
     SMTP_USER: 'test@example.test',
     SMTP_PASSWORD: 'test-only-password',
     SMTP_FROM: 'test@example.test',
+    RESEND_API_KEY: '',
+    RESEND_FROM: '',
   })
   try {
     return await action()
