@@ -119,6 +119,16 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
   const commentsResponse = await admin.get(`/api/issues/${issue.id}/comments`).expect(200)
   assert.equal(commentsResponse.body.comments.length, 2)
 
+  const workspaceExport = await admin.get('/api/workspace/export').expect(200)
+  assert.equal(workspaceExport.headers['cache-control'], 'no-store')
+  assert.equal(typeof workspaceExport.body.exportedAt, 'string')
+  assert.equal(workspaceExport.body.workspace.id, registration.body.workspaceId)
+  assert.deepEqual(workspaceExport.body.projects.map((entry) => entry.id), [project.id])
+  assert(workspaceExport.body.issues.some((entry) => entry.id === issue.id))
+  assert.equal(workspaceExport.body.members.length, 1)
+  assert.equal(workspaceExport.body.members[0].role, 'Admin')
+  assert.equal(workspaceExport.body.comments.length, 2)
+
   await admin.post('/api/auth/forgot-password')
     .set('X-CSRF-Token', adminCsrf)
     .send({ email: 'owner@example.test' })
@@ -183,6 +193,7 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
   assert.equal(viewerRegistration.body.user.role, 'Viewer')
   const viewerId = viewerRegistration.body.user.id
   assert.equal((await viewer.get(`/api/projects/${project.id}/issues`).expect(200)).body.issues.length, 2)
+  await viewer.get('/api/workspace/export').expect(403)
 
   await viewer.post(`/api/projects/${project.id}/issues`)
     .set('X-CSRF-Token', viewerCsrf)
@@ -231,7 +242,7 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .set('X-CSRF-Token', outsiderCsrf)
     .send({ name: 'Separate API Project', key: 'PLN', description: '' })
     .expect(201)
-  await outsider.post(`/api/projects/${outsiderProject.body.project.id}/issues`)
+  const outsiderIssue = await outsider.post(`/api/projects/${outsiderProject.body.project.id}/issues`)
     .set('X-CSRF-Token', outsiderCsrf)
     .send({
       title: 'Same project key isolated',
@@ -241,6 +252,18 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
       status: 'todo',
     })
     .expect(201)
+  await outsider.post(`/api/issues/${outsiderIssue.body.issue.id}/comments`)
+    .set('X-CSRF-Token', outsiderCsrf)
+    .send({ text: 'Comment belongs to the other workspace' })
+    .expect(201)
+
+  const isolatedExport = await admin.get('/api/workspace/export').expect(200)
+  assert.equal(isolatedExport.body.workspace.id, registration.body.workspaceId)
+  assert.deepEqual(isolatedExport.body.projects.map((entry) => entry.id), [project.id])
+  assert(isolatedExport.body.issues.every((entry) => entry.projectId === project.id))
+  assert.equal(isolatedExport.body.comments.length, 2)
+  assert.deepEqual(isolatedExport.body.members.map((entry) => entry.email), ['owner@example.test'])
+
   await outsider.get(`/api/projects/${project.id}`).expect(404)
   await admin.post('/api/auth/logout')
     .set('X-CSRF-Token', adminCsrf)

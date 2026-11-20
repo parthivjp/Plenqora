@@ -65,6 +65,7 @@ The backend uses an MVC layout under `backend/src`:
 - `validators/`: strict Zod schemas for request bodies, parameters, and filters.
 
 Health check: `GET /api/health`. API routes are under `/api/auth`, `/api/workspace`, `/api/projects`, and `/api/issues`.
+Workspace Admins can export a workspace-scoped JSON snapshot containing workspace details, members, projects, issues, and comments.
 
 ## Validation
 

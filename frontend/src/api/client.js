@@ -18,6 +18,9 @@ const errorTitles = {
   EMAIL_NOT_CONFIGURED: 'Email service unavailable',
   EMAIL_DELIVERY_FAILED: 'Email could not be sent',
   RESET_TOKEN_INVALID: 'Invalid or expired reset link',
+  WORKSPACE_EXPORT_FAILED: 'Workspace export failed',
+  WORKSPACE_EXPORT_DOWNLOAD_FAILED: 'Workspace export failed',
+  INVALID_EXPORT_RESPONSE: 'Invalid workspace export',
 }
 
 function titleForStatus(status) {

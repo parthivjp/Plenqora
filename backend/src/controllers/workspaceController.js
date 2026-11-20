@@ -60,15 +60,30 @@ export const bootstrap = asyncHandler(async (req, res) => {
 })
 
 export const exportData = asyncHandler(async (req, res) => {
-  const { workspace } = await getWorkspaceMember(req.user)
-  const [projects, issues, comments, members] = await Promise.all([
-    Project.find({ workspaceId: workspace._id }),
-    Issue.find({ workspaceId: workspace._id }).populate('assignee', 'name'),
-    Comment.find({ workspaceId: workspace._id }).sort({ createdAt: 1 }).populate('author', 'name'),
-    User.find({ _id: { $in: workspace.members.map((member) => member.user) } }),
-  ])
+  const workspace = req.workspace
+  let projects
+  let issues
+  let comments
+  let members
+  try {
+    [projects, issues, comments, members] = await Promise.all([
+      Project.find({ workspaceId: workspace._id }).sort({ createdAt: 1, _id: 1 }),
+      Issue.find({ workspaceId: workspace._id })
+        .sort({ createdAt: 1, _id: 1 })
+        .populate('assignee', 'name'),
+      Comment.find({ workspaceId: workspace._id })
+        .sort({ createdAt: 1, _id: 1 })
+        .populate('author', 'name'),
+      User.find({ _id: { $in: workspace.members.map((member) => member.user) } })
+        .sort({ name: 1, _id: 1 }),
+    ])
+  } catch (error) {
+    console.error('[api] workspace data export query failed', error)
+    throw new ApiError(500, 'Workspace data could not be exported. Please try again.', 'WORKSPACE_EXPORT_FAILED')
+  }
+
   const roles = new Map(workspace.members.map((member) => [member.user.toString(), member.role]))
-  res.json({
+  res.set('Cache-Control', 'no-store').json({
     exportedAt: new Date().toISOString(),
     workspace: workspaceDto(workspace),
     projects: projects.map(serializeProject),

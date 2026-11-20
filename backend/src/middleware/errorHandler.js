@@ -2,6 +2,7 @@ import mongoose from 'mongoose'
 import ApiError from '../utils/ApiError.js'
 
 function titleFor(status, code) {
+  if (code === 'WORKSPACE_EXPORT_FAILED') return 'Workspace export failed'
   if (code === 'INVALID_JSON') return 'Request could not be read'
   if (code === 'EMAIL_NOT_CONFIGURED') return 'Email service unavailable'
   if (code === 'EMAIL_DELIVERY_FAILED') return 'Email could not be sent'

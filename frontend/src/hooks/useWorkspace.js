@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import { apiDelete, apiGet, apiPatch, apiPost } from '../api/client'
+import { ApiError, apiDelete, apiGet, apiPatch, apiPost } from '../api/client'
 
 const emptyWorkspace = {
   workspace: null,
@@ -217,12 +217,34 @@ export function useWorkspace({ enabled, userId, userRole, filters }) {
 
   const exportData = async () => {
     const payload = await apiGet('/workspace/export')
-    const url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
+    if (
+      typeof payload?.exportedAt !== 'string'
+      || !payload.workspace
+      || !Array.isArray(payload.projects)
+      || !Array.isArray(payload.issues)
+      || !Array.isArray(payload.members)
+      || !Array.isArray(payload.comments)
+    ) {
+      throw new ApiError('The server returned incomplete workspace data. Please try again.', 502, 'INVALID_EXPORT_RESPONSE')
+    }
+
+    let url
     const link = document.createElement('a')
-    link.href = url
-    link.download = 'plenqora-workspace.json'
-    link.click()
-    URL.revokeObjectURL(url)
+    try {
+      url = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }))
+      link.href = url
+      link.download = 'plenqora-workspace.json'
+      link.hidden = true
+      document.body.append(link)
+      link.click()
+    } catch (error) {
+      if (url) URL.revokeObjectURL(url)
+      console.error('[ui] workspace data download failed', error)
+      throw new ApiError('Your workspace data could not be downloaded. Please try again.', 500, 'WORKSPACE_EXPORT_DOWNLOAD_FAILED')
+    } finally {
+      link.remove()
+    }
+    window.setTimeout(() => URL.revokeObjectURL(url), 1000)
   }
 
   return {

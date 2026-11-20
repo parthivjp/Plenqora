@@ -49,6 +49,24 @@ test('structured API errors retain their user-facing title and reason', async ()
   })
 })
 
+test('workspace export API errors have a feature-specific title', async () => {
+  const response = new Response(JSON.stringify({
+    error: {
+      code: 'WORKSPACE_EXPORT_FAILED',
+      message: 'Workspace data could not be exported. Please try again.',
+    },
+  }), {
+    status: 500,
+    headers: { 'Content-Type': 'application/json' },
+  })
+
+  await assert.rejects(parseResponse(response), (error) => {
+    assert.equal(error.title, 'Workspace export failed')
+    assert.equal(error.reason, 'Workspace data could not be exported. Please try again.')
+    return true
+  })
+})
+
 test('a connection failure explains how to recover without exposing browser details', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => {
