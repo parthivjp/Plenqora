@@ -1,24 +1,28 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { isEmailConfigured, sendEmail } from '../src/services/mailer.js'
+import { escapeHtml, isEmailConfigured, sendEmail } from '../src/services/mailer.js'
 
-test('email delivery uses the Resend HTTPS API when configured', async () => {
-  const keys = ['RESEND_API_KEY', 'RESEND_FROM', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM']
-  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+const emailEnvironmentKeys = ['BREVO_API_KEY', 'BREVO_FROM']
+
+function saveEmailEnvironment() {
+  return Object.fromEntries(emailEnvironmentKeys.map((key) => [key, process.env[key]]))
+}
+
+function restoreEmailEnvironment(previous) {
+  for (const key of emailEnvironmentKeys) process.env[key] = previous[key] ?? ''
+}
+
+test('email delivery uses Brevo HTTPS API with the expected payload', async () => {
+  const previous = saveEmailEnvironment()
   const originalFetch = globalThis.fetch
   let request
   Object.assign(process.env, {
-    RESEND_API_KEY: 'test-resend-key',
-    RESEND_FROM: 'Plenqora <invites@example.test>',
-    SMTP_HOST: '',
-    SMTP_PORT: '',
-    SMTP_USER: '',
-    SMTP_PASSWORD: '',
-    SMTP_FROM: '',
+    BREVO_API_KEY: 'test-brevo-key',
+    BREVO_FROM: 'invites@example.test',
   })
   globalThis.fetch = async (url, options) => {
     request = { url, options }
-    return new Response(JSON.stringify({ id: 'test-email-id' }), { status: 200 })
+    return new Response(JSON.stringify({ messageId: 'test-message-id' }), { status: 201 })
   }
 
   try {
@@ -26,45 +30,74 @@ test('email delivery uses the Resend HTTPS API when configured', async () => {
     await sendEmail({
       to: 'teammate@example.test',
       subject: 'Workspace invitation',
-      text: 'Use the secure link to join.',
+      htmlContent: '<p>Use the secure link to join.</p>',
     })
-    assert.equal(request.url, 'https://api.resend.com/emails')
+    assert.equal(request.url, 'https://api.brevo.com/v3/smtp/email')
     assert.equal(request.options.method, 'POST')
-    assert.equal(request.options.headers.Authorization, 'Bearer test-resend-key')
+    assert.equal(request.options.headers['api-key'], 'test-brevo-key')
+    assert.equal(request.options.headers['Content-Type'], 'application/json')
     assert.deepEqual(JSON.parse(request.options.body), {
-      from: 'Plenqora <invites@example.test>',
-      to: ['teammate@example.test'],
+      sender: { name: 'Plenqora', email: 'invites@example.test' },
+      to: [{ email: 'teammate@example.test' }],
       subject: 'Workspace invitation',
-      text: 'Use the secure link to join.',
+      htmlContent: '<p>Use the secure link to join.</p>',
     })
   } finally {
     globalThis.fetch = originalFetch
-    for (const key of keys) process.env[key] = previous[key] ?? ''
+    restoreEmailEnvironment(previous)
   }
 })
 
-test('Resend API rejection surfaces a delivery error', async () => {
-  const keys = ['RESEND_API_KEY', 'RESEND_FROM', 'SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM']
-  const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
+test('missing Brevo settings are logged and prevent a request', async () => {
+  const previous = saveEmailEnvironment()
   const originalFetch = globalThis.fetch
+  const originalConsoleError = console.error
+  const loggedErrors = []
+  Object.assign(process.env, { BREVO_API_KEY: '', BREVO_FROM: '' })
+  globalThis.fetch = async () => {
+    throw new Error('Brevo must not be called without credentials.')
+  }
+  console.error = (...args) => loggedErrors.push(args.join(' '))
+
+  try {
+    assert.equal(isEmailConfigured(), false)
+    await assert.rejects(
+      sendEmail({ to: 'teammate@example.test', subject: 'Invite', htmlContent: '<p>Join.</p>' }),
+      /missing BREVO_API_KEY, BREVO_FROM/,
+    )
+    assert(loggedErrors.some((entry) => entry.includes('missing BREVO_API_KEY, BREVO_FROM')))
+  } finally {
+    globalThis.fetch = originalFetch
+    console.error = originalConsoleError
+    restoreEmailEnvironment(previous)
+  }
+})
+
+test('Brevo rejection logs HTTP status and response body', async () => {
+  const previous = saveEmailEnvironment()
+  const originalFetch = globalThis.fetch
+  const originalConsoleError = console.error
+  const loggedErrors = []
   Object.assign(process.env, {
-    RESEND_API_KEY: 'test-resend-key',
-    RESEND_FROM: 'Plenqora <invites@example.test>',
-    SMTP_HOST: '',
-    SMTP_PORT: '',
-    SMTP_USER: '',
-    SMTP_PASSWORD: '',
-    SMTP_FROM: '',
+    BREVO_API_KEY: 'test-brevo-key',
+    BREVO_FROM: 'invites@example.test',
   })
-  globalThis.fetch = async () => new Response('', { status: 403 })
+  globalThis.fetch = async () => new Response('{"code":"unauthorized","message":"Invalid API key"}', { status: 401 })
+  console.error = (...args) => loggedErrors.push(args.join(' '))
 
   try {
     await assert.rejects(
-      sendEmail({ to: 'teammate@example.test', subject: 'Invite', text: 'Join.' }),
-      /Resend email API returned HTTP 403/,
+      sendEmail({ to: 'teammate@example.test', subject: 'Invite', htmlContent: '<p>Join.</p>' }),
+      /Brevo email API returned HTTP 401/,
     )
+    assert(loggedErrors.some((entry) => entry.includes('HTTP 401') && entry.includes('Invalid API key')))
   } finally {
     globalThis.fetch = originalFetch
-    for (const key of keys) process.env[key] = previous[key] ?? ''
+    console.error = originalConsoleError
+    restoreEmailEnvironment(previous)
   }
+})
+
+test('email HTML values are escaped before insertion into templates', () => {
+  assert.equal(escapeHtml(`<script a="b">Tom & Jerry's</script>`), '&lt;script a=&quot;b&quot;&gt;Tom &amp; Jerry&#39;s&lt;/script&gt;')
 })

@@ -10,7 +10,7 @@ import asyncHandler from '../utils/asyncHandler.js'
 import { comparePassword, hashPassword, validatePasswordLength } from '../utils/password.js'
 import { serializeUser } from '../utils/serializers.js'
 import { cookieSettings, createCsrfToken } from '../middleware/csrf.js'
-import { isEmailConfigured, sendEmail } from '../services/mailer.js'
+import { escapeHtml, isEmailConfigured, sendEmail } from '../services/mailer.js'
 
 function sessionCookieAge() {
   const value = process.env.JWT_EXPIRES_IN || '30m'
@@ -141,7 +141,7 @@ export const updatePassword = asyncHandler(async (req, res) => {
 
 export const requestPasswordReset = asyncHandler(async (req, res) => {
   if (!isEmailConfigured() && process.env.NODE_ENV !== 'development') {
-    throw new ApiError(503, 'Password recovery is unavailable until SMTP settings are configured.', 'EMAIL_NOT_CONFIGURED')
+    throw new ApiError(503, 'Password recovery is unavailable until Brevo email settings are configured.', 'EMAIL_NOT_CONFIGURED')
   }
   const { email } = req.validated.body
   let devResetUrl = null
@@ -159,7 +159,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
         await sendEmail({
           to: email,
           subject: 'Reset your Plenqora password',
-          text: `Use this link within one hour to reset your password:\n\n${resetUrl}\n\nIf you did not request this, ignore this email.`,
+          htmlContent: `<p>Use the link below within one hour to reset your Plenqora password.</p><p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
         })
       } catch (error) {
         user.resetTokenHash = undefined
@@ -170,14 +170,14 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
       }
     } else {
       devResetUrl = resetUrl
-      console.warn('[api] SMTP is not configured; reset email was not sent. Use the local development link.')
+      console.warn('[api] Brevo is not configured; reset email was not sent. Use the local development link.')
     }
   }
   res.status(202).json({
     emailStatus: emailConfigured ? 'submitted' : 'not-configured',
     message: emailConfigured
       ? 'If an account exists for this address, a password reset link has been sent.'
-      : 'No email was sent because SMTP is not configured. For a registered local account, use the development reset link below.',
+      : 'No email was sent because Brevo is not configured. For a registered local account, use the development reset link below.',
     ...(devResetUrl ? { resetUrl: devResetUrl } : {}),
   })
 })

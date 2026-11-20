@@ -9,7 +9,7 @@ import asyncHandler from '../utils/asyncHandler.js'
 import { getWorkspaceMember } from '../services/access.js'
 import { serializeIssue, serializeProject } from '../utils/serializers.js'
 import Comment from '../models/Comment.js'
-import { isEmailConfigured, sendEmail } from '../services/mailer.js'
+import { escapeHtml, isEmailConfigured, sendEmail } from '../services/mailer.js'
 
 function workspaceDto(workspace) {
   return {
@@ -25,7 +25,7 @@ async function sendInvitationEmail(to, workspaceName, inviteUrl) {
     await sendEmail({
       to,
       subject: `You've been invited to ${workspaceName} on Plenqora`,
-      text: `Create your account using this invitation link within seven days:\n\n${inviteUrl}`,
+      htmlContent: `<p>You have been invited to join <strong>${escapeHtml(workspaceName)}</strong> on Plenqora.</p><p><a href="${escapeHtml(inviteUrl)}">Accept your invitation</a></p><p>This secure link expires in seven days.</p>`,
     })
   } catch (error) {
     console.error('[api] team invitation email delivery failed', error)

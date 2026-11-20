@@ -6,7 +6,7 @@ process.env.NODE_ENV = 'test'
 process.env.JWT_SECRET = 'test-only-jwt-secret-with-more-than-thirty-two-characters'
 process.env.MONGODB_URI = `mongodb://127.0.0.1:27017/plenqora_test_${process.pid}_${Date.now()}`
 process.env.FRONTEND_ORIGIN = 'http://localhost:5173'
-for (const key of ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM', 'RESEND_API_KEY', 'RESEND_FROM']) {
+for (const key of ['BREVO_API_KEY', 'BREVO_FROM']) {
   process.env[key] = ''
 }
 
@@ -33,21 +33,19 @@ async function authenticatedAgent() {
   return { agent, csrf: response.body.csrfToken }
 }
 
-async function withUnreachableSmtp(action) {
-  const keys = ['SMTP_HOST', 'SMTP_PORT', 'SMTP_USER', 'SMTP_PASSWORD', 'SMTP_FROM', 'RESEND_API_KEY', 'RESEND_FROM']
+async function withRejectedEmailDelivery(action) {
+  const keys = ['BREVO_API_KEY', 'BREVO_FROM']
   const previous = Object.fromEntries(keys.map((key) => [key, process.env[key]]))
   Object.assign(process.env, {
-    SMTP_HOST: '127.0.0.1',
-    SMTP_PORT: '1',
-    SMTP_USER: 'test@example.test',
-    SMTP_PASSWORD: 'test-only-password',
-    SMTP_FROM: 'test@example.test',
-    RESEND_API_KEY: '',
-    RESEND_FROM: '',
+    BREVO_API_KEY: 'test-brevo-key',
+    BREVO_FROM: 'invites@example.test',
   })
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response('Email service unavailable', { status: 503 })
   try {
     return await action()
   } finally {
+    globalThis.fetch = originalFetch
     for (const key of keys) process.env[key] = previous[key]
   }
 }
@@ -157,7 +155,7 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .send({ token: '0'.repeat(64), newPassword: 'StrongPassword123' })
     .expect(400)
 
-  await withUnreachableSmtp(async () => {
+  await withRejectedEmailDelivery(async () => {
     const response = await admin.post('/api/workspace/invitations')
       .set('X-CSRF-Token', adminCsrf)
       .send({ email: 'delivery-failure@example.test', role: 'Viewer' })
@@ -174,7 +172,7 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .send({ email: 'viewer@example.test', role: 'Viewer' })
     .expect(201)
   let resentInvitation
-  await withUnreachableSmtp(async () => {
+  await withRejectedEmailDelivery(async () => {
     const response = await admin.post(`/api/workspace/invitations/${invitationResponse.body.invitation.id}/resend`)
       .set('X-CSRF-Token', adminCsrf)
       .send({})

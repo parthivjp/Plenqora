@@ -49,11 +49,10 @@ Plenqora is a React project-management workspace backed by an Express/Mongoose A
 ## Accounts, invitations, and email
 
 - A new, non-invited signup creates a private workspace owned by that account. It does not grant access to another user's workspace.
-- Team invitations expire after seven days. Without SMTP settings, or if email delivery fails, the API provides a one-time secure link that an Admin or Manager can share. Delivery failures are logged by the API and shown to the Admin or Manager as a warning.
+- Team invitations expire after seven days. Without Brevo settings, or if email delivery fails, the API provides a one-time secure link that an Admin or Manager can share. Delivery failures are logged by the API and shown by the UI as a warning.
 - Passwords must be at least 12 characters and include uppercase, lowercase, and numeric characters. Passwords are hashed with bcrypt; the browser only receives an HTTP-only session cookie.
-- Password recovery sends email only when an email provider is configured. In local development without email settings, the UI explicitly says that no email was sent and provides a one-time reset link for a registered account. Production returns a delivery/configuration error rather than claiming that an email was sent.
-- For Gmail SMTP, enable 2-Step Verification on the sending Google account and create an App Password. In `backend\.env`, set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER` to the full Gmail address, `SMTP_PASSWORD` to the App Password, and `SMTP_FROM` to that Gmail address. Never use your normal Google password or commit these values. Restart the backend after changing the environment file.
-- For Render, prefer Resend's HTTPS API when SMTP connections time out. Set `RESEND_API_KEY` and `RESEND_FROM` in Render; use a sender address on a domain verified with Resend. When both Resend and SMTP are configured, the API uses Resend.
+- Password recovery sends email only when Brevo is configured. In local development without email settings, the UI explicitly says that no email was sent and provides a one-time reset link for a registered account. Production returns a delivery/configuration error rather than claiming that an email was sent.
+- For Render, configure `BREVO_API_KEY` and `BREVO_FROM` in the backend service environment. `BREVO_FROM` must be a sender address authorized and verified in Brevo. Email is sent over Brevo's HTTPS Transactional Email API; SMTP credentials are not used.
 - Workspace roles are `Admin`, `Manager`, `Developer`, and `Viewer`. Project and issue permissions are checked by API middleware/controllers, not only hidden in the UI.
 - For a cross-site production deployment, set `FRONTEND_ORIGIN` to the exact frontend origin and configure HTTPS plus `COOKIE_SAME_SITE=none`. Keep the JWT secret private and rotate it if compromised.
 

@@ -1,63 +1,69 @@
-import nodemailer from 'nodemailer'
+const BREVO_EMAIL_API_URL = 'https://api.brevo.com/v3/smtp/email'
+const BREVO_TIMEOUT_MS = 10_000
 
-function isResendConfigured() {
-  return Boolean(process.env.RESEND_API_KEY && process.env.RESEND_FROM)
-}
-
-function isSmtpConfigured() {
-  return Boolean(
-    process.env.SMTP_HOST
-    && process.env.SMTP_PORT
-    && process.env.SMTP_USER
-    && process.env.SMTP_PASSWORD
-    && process.env.SMTP_FROM,
-  )
+function missingBrevoSettings() {
+  return ['BREVO_API_KEY', 'BREVO_FROM'].filter((key) => !process.env[key]?.trim())
 }
 
 export function isEmailConfigured() {
-  return isResendConfigured() || isSmtpConfigured()
+  const missing = missingBrevoSettings()
+  if (missing.length) {
+    console.error(`[api] Brevo email is not configured; missing ${missing.join(', ')}.`)
+    return false
+  }
+  return true
 }
 
-export async function sendEmail({ to, subject, text }) {
-  if (isResendConfigured()) {
-    const response = await fetch('https://api.resend.com/emails', {
+export function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, (character) => ({
+    '&': '&amp;',
+    '<': '&lt;',
+    '>': '&gt;',
+    '"': '&quot;',
+    "'": '&#39;',
+  })[character])
+}
+
+export async function sendEmail({ to, subject, htmlContent }) {
+  const missing = missingBrevoSettings()
+  if (missing.length) {
+    const message = `Brevo email is not configured; missing ${missing.join(', ')}.`
+    console.error(`[api] ${message}`)
+    throw new Error(message)
+  }
+  if (typeof htmlContent !== 'string' || !htmlContent.trim()) {
+    throw new Error('Brevo email content must be a non-empty HTML string.')
+  }
+
+  let response
+  try {
+    response = await fetch(BREVO_EMAIL_API_URL, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${process.env.RESEND_API_KEY}`,
+        'api-key': process.env.BREVO_API_KEY,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        from: process.env.RESEND_FROM,
-        to: [to],
+        sender: { name: 'Plenqora', email: process.env.BREVO_FROM },
+        to: [{ email: to }],
         subject,
-        text,
+        htmlContent,
       }),
-      signal: AbortSignal.timeout(10_000),
+      signal: AbortSignal.timeout(BREVO_TIMEOUT_MS),
     })
-    if (!response.ok) throw new Error(`Resend email API returned HTTP ${response.status}.`)
-    return
+  } catch (error) {
+    console.error('[api] Brevo email request failed before receiving a response', error)
+    throw error
   }
 
-  if (!isSmtpConfigured()) throw new Error('Email settings are incomplete.')
-  const port = Number(process.env.SMTP_PORT)
-  const transport = nodemailer.createTransport({
-    host: process.env.SMTP_HOST,
-    port,
-    secure: port === 465,
-    auth: { user: process.env.SMTP_USER, pass: process.env.SMTP_PASSWORD },
-    connectionTimeout: 10_000,
-    greetingTimeout: 10_000,
-    socketTimeout: 10_000,
-  })
-  try {
-    await transport.verify()
-    await transport.sendMail({
-      from: process.env.SMTP_FROM,
-      to,
-      subject,
-      text,
-    })
-  } finally {
-    transport.close()
+  if (!response.ok) {
+    let responseBody
+    try {
+      responseBody = await response.text()
+    } catch (error) {
+      responseBody = `Unable to read Brevo response body: ${error.message}`
+    }
+    console.error(`[api] Brevo email request failed with HTTP ${response.status}: ${responseBody}`)
+    throw new Error(`Brevo email API returned HTTP ${response.status}.`)
   }
 }
