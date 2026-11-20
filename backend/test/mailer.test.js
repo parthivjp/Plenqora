@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
-import { escapeHtml, isEmailConfigured, sendEmail } from '../src/services/mailer.js'
+import { isEmailConfigured, sendEmail } from '../src/services/mailer.js'
+import { createInvitationEmail, createPasswordResetEmail, escapeHtml } from '../src/services/emailTemplates.js'
 
 const emailEnvironmentKeys = ['BREVO_API_KEY', 'BREVO_FROM']
 
@@ -100,4 +101,24 @@ test('Brevo rejection logs HTTP status and response body', async () => {
 
 test('email HTML values are escaped before insertion into templates', () => {
   assert.equal(escapeHtml(`<script a="b">Tom & Jerry's</script>`), '&lt;script a=&quot;b&quot;&gt;Tom &amp; Jerry&#39;s&lt;/script&gt;')
+})
+
+test('invitation email has branded layout, clear action, expiry, and escaped dynamic values', () => {
+  const email = createInvitationEmail('<Research & Design>', 'https://example.test/signup?invite=abc&next=home')
+  assert.equal(email.subject, "You're invited to join <Research & Design> on Plenqora")
+  assert.match(email.htmlContent, /plenqora<span/)
+  assert.match(email.htmlContent, /You’re invited!/)
+  assert.match(email.htmlContent, /Accept invitation/)
+  assert.match(email.htmlContent, /expires in <strong>7 days<\/strong>/)
+  assert.match(email.htmlContent, /&lt;Research &amp; Design&gt;/)
+  assert.match(email.htmlContent, /invite=abc&amp;next=home/)
+})
+
+test('password reset email clearly states the action and one-hour expiry', () => {
+  const email = createPasswordResetEmail('https://example.test/reset-password?token=abc')
+  assert.equal(email.subject, 'Reset your Plenqora password')
+  assert.match(email.htmlContent, /Reset your password/)
+  assert.match(email.htmlContent, /Reset password/)
+  assert.match(email.htmlContent, /expires in <strong>1 hour<\/strong>/)
+  assert.match(email.htmlContent, /can only be used once/)
 })

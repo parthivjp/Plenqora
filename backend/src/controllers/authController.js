@@ -10,7 +10,8 @@ import asyncHandler from '../utils/asyncHandler.js'
 import { comparePassword, hashPassword, validatePasswordLength } from '../utils/password.js'
 import { serializeUser } from '../utils/serializers.js'
 import { cookieSettings, createCsrfToken } from '../middleware/csrf.js'
-import { escapeHtml, isEmailConfigured, sendEmail } from '../services/mailer.js'
+import { createPasswordResetEmail } from '../services/emailTemplates.js'
+import { isEmailConfigured, sendEmail } from '../services/mailer.js'
 
 function sessionCookieAge() {
   const value = process.env.JWT_EXPIRES_IN || '30m'
@@ -158,8 +159,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
       try {
         await sendEmail({
           to: email,
-          subject: 'Reset your Plenqora password',
-          htmlContent: `<p>Use the link below within one hour to reset your Plenqora password.</p><p><a href="${escapeHtml(resetUrl)}">Reset your password</a></p><p>If you did not request this, you can ignore this email.</p>`,
+          ...createPasswordResetEmail(resetUrl),
         })
       } catch (error) {
         user.resetTokenHash = undefined
