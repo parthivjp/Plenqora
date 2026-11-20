@@ -305,4 +305,23 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     .set('X-CSRF-Token', newPasswordSession.csrf)
     .send({ email: 'owner@example.test', password: 'AnotherStrongPass456' })
     .expect(200)
+
+  const previousFrontendOrigin = process.env.FRONTEND_ORIGIN
+  const previousNodeEnvironment = process.env.NODE_ENV
+  delete process.env.FRONTEND_ORIGIN
+  process.env.NODE_ENV = 'development'
+  try {
+    const fallbackResetSession = await authenticatedAgent()
+    const fallbackReset = await fallbackResetSession.agent.post('/api/auth/forgot-password')
+      .set('X-CSRF-Token', fallbackResetSession.csrf)
+      .send({ email: 'owner@example.test' })
+      .expect(202)
+    assert.match(
+      fallbackReset.body.resetUrl,
+      /^https:\/\/plenqora\.vercel\.app\/reset-password\?token=[a-f\d]{64}$/i,
+    )
+  } finally {
+    process.env.FRONTEND_ORIGIN = previousFrontendOrigin
+    process.env.NODE_ENV = previousNodeEnvironment
+  }
 })

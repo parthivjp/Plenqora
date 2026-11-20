@@ -153,7 +153,7 @@ export const requestPasswordReset = asyncHandler(async (req, res) => {
     user.resetTokenHash = invitationDigest(token)
     user.resetTokenExpiresAt = new Date(Date.now() + 60 * 60 * 1000)
     await user.save()
-    const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173'
+    const origin = process.env.FRONTEND_ORIGIN || 'https://plenqora.vercel.app'
     const resetUrl = new URL(`/reset-password?token=${token}`, origin).toString()
     if (emailConfigured) {
       try {
