@@ -147,13 +147,14 @@ export const createInvitation = asyncHandler(async (req, res) => {
   })
   const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173'
   const inviteUrl = new URL(`/signup?invite=${token}`, origin).toString()
-  const delivery = isEmailConfigured() ? 'email' : 'manual'
+  let delivery = isEmailConfigured() ? 'email' : 'manual'
+  let emailWarning
   if (delivery === 'email') {
     try {
       await sendInvitationEmail(email, req.workspace.name, inviteUrl)
     } catch {
-      await Invitation.deleteOne({ _id: invitation._id, workspaceId: req.workspace._id })
-      throw new ApiError(503, 'The invitation email could not be sent, so no invitation was created. Check your email settings and try again.', 'EMAIL_DELIVERY_FAILED')
+      delivery = 'manual'
+      emailWarning = 'Invitation created, but the email could not be sent. Share the secure link manually.'
     }
   }
   res.status(201).json({
@@ -164,6 +165,7 @@ export const createInvitation = asyncHandler(async (req, res) => {
       expiresAt: invitation.expiresAt,
       inviteUrl,
       delivery,
+      ...(emailWarning ? { emailWarning } : {}),
     },
   })
 })
@@ -186,23 +188,20 @@ export const resendInvitation = asyncHandler(async (req, res) => {
     expiresAt: { $gt: new Date() },
   })
   if (!invitation) throw new ApiError(404, 'Invitation not found or expired.', 'INVITATION_NOT_FOUND')
-  const previousTokenHash = invitation.tokenHash
-  const previousExpiresAt = invitation.expiresAt
   const token = crypto.randomBytes(32).toString('hex')
   invitation.tokenHash = crypto.createHash('sha256').update(token).digest('hex')
   invitation.expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000)
   await invitation.save()
   const origin = process.env.FRONTEND_ORIGIN || 'http://localhost:5173'
   const inviteUrl = new URL(`/signup?invite=${token}`, origin).toString()
-  const delivery = isEmailConfigured() ? 'email' : 'manual'
+  let delivery = isEmailConfigured() ? 'email' : 'manual'
+  let emailWarning
   if (delivery === 'email') {
     try {
       await sendInvitationEmail(invitation.email, req.workspace.name, inviteUrl)
     } catch {
-      invitation.tokenHash = previousTokenHash
-      invitation.expiresAt = previousExpiresAt
-      await invitation.save()
-      throw new ApiError(503, 'The invitation email could not be sent. The existing invitation link is still valid. Check your email settings and try again.', 'EMAIL_DELIVERY_FAILED')
+      delivery = 'manual'
+      emailWarning = 'Invitation link refreshed, but the email could not be sent. Share the new secure link manually.'
     }
   }
   res.json({
@@ -213,6 +212,7 @@ export const resendInvitation = asyncHandler(async (req, res) => {
       expiresAt: invitation.expiresAt,
       inviteUrl,
       delivery,
+      ...(emailWarning ? { emailWarning } : {}),
     },
   })
 })

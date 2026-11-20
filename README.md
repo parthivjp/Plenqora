@@ -48,7 +48,7 @@ Plenqora is a React project-management workspace backed by an Express/Mongoose A
 ## Accounts, invitations, and email
 
 - A new, non-invited signup creates a private workspace owned by that account. It does not grant access to another user's workspace.
-- Team invitations expire after seven days. Without SMTP settings, the API provides a one-time secure link that an Admin or Manager can share. With SMTP configured, it emails the link as well.
+- Team invitations expire after seven days. Without SMTP settings, or if email delivery fails, the API provides a one-time secure link that an Admin or Manager can share. Delivery failures are logged by the API and shown to the Admin or Manager as a warning.
 - Passwords must be at least 12 characters and include uppercase, lowercase, and numeric characters. Passwords are hashed with bcrypt; the browser only receives an HTTP-only session cookie.
 - Password recovery sends email only when SMTP is configured. In local development without SMTP, the UI explicitly says that no email was sent and provides a one-time reset link for a registered account. Production requires SMTP and returns a delivery/configuration error rather than claiming that an email was sent.
 - For Gmail SMTP, enable 2-Step Verification on the sending Google account and create an App Password. In `backend\.env`, set `SMTP_HOST=smtp.gmail.com`, `SMTP_PORT=587`, `SMTP_USER` to the full Gmail address, `SMTP_PASSWORD` to the App Password, and `SMTP_FROM` to that Gmail address. Never use your normal Google password or commit these values. Restart the backend after changing the environment file.

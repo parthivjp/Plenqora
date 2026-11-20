@@ -159,25 +159,30 @@ test('auth, workspace isolation, project and issue permissions, and comments', a
     const response = await admin.post('/api/workspace/invitations')
       .set('X-CSRF-Token', adminCsrf)
       .send({ email: 'delivery-failure@example.test', role: 'Viewer' })
-      .expect(503)
-    assert.equal(response.body.error.code, 'EMAIL_DELIVERY_FAILED')
+      .expect(201)
+    assert.equal(response.body.invitation.delivery, 'manual')
+    assert.match(response.body.invitation.emailWarning, /email could not be sent/i)
+    assert.equal(typeof response.body.invitation.inviteUrl, 'string')
     const listed = await admin.get('/api/workspace/invitations').expect(200)
-    assert.equal(listed.body.invitations.some((entry) => entry.email === 'delivery-failure@example.test'), false)
+    assert.equal(listed.body.invitations.some((entry) => entry.email === 'delivery-failure@example.test'), true)
   })
 
   const invitationResponse = await admin.post('/api/workspace/invitations')
     .set('X-CSRF-Token', adminCsrf)
     .send({ email: 'viewer@example.test', role: 'Viewer' })
     .expect(201)
+  let resentInvitation
   await withUnreachableSmtp(async () => {
     const response = await admin.post(`/api/workspace/invitations/${invitationResponse.body.invitation.id}/resend`)
       .set('X-CSRF-Token', adminCsrf)
       .send({})
-      .expect(503)
-    assert.equal(response.body.error.code, 'EMAIL_DELIVERY_FAILED')
-    assert.match(response.body.error.message, /existing invitation link is still valid/i)
+      .expect(200)
+    resentInvitation = response.body.invitation
+    assert.equal(resentInvitation.delivery, 'manual')
+    assert.match(resentInvitation.emailWarning, /email could not be sent/i)
+    assert.notEqual(resentInvitation.inviteUrl, invitationResponse.body.invitation.inviteUrl)
   })
-  const invitationToken = new URL(invitationResponse.body.invitation.inviteUrl).searchParams.get('invite')
+  const invitationToken = new URL(resentInvitation.inviteUrl).searchParams.get('invite')
   const viewerSession = await authenticatedAgent()
   viewer = viewerSession.agent
   viewerCsrf = viewerSession.csrf
