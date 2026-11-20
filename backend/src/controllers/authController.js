@@ -135,10 +135,18 @@ export const updatePassword = asyncHandler(async (req, res) => {
   if (!(await comparePassword(currentPassword, user.passwordHash))) {
     throw new ApiError(400, 'Your current password is incorrect.', 'CURRENT_PASSWORD_INCORRECT')
   }
-  user.passwordHash = await hashPassword(newPassword)
-  user.sessionVersion += 1
-  await user.save()
-  setSessionCookie(res, user._id, user.sessionVersion)
+  const updatedUser = await User.findOneAndUpdate({
+    _id: user._id,
+    passwordHash: user.passwordHash,
+  }, {
+    $set: { passwordHash: await hashPassword(newPassword) },
+    $unset: { resetTokenHash: 1, resetTokenExpiresAt: 1 },
+    $inc: { sessionVersion: 1 },
+  }, { returnDocument: 'after' }).select('+sessionVersion')
+  if (!updatedUser) {
+    throw new ApiError(409, 'Your password changed before this update completed. Please sign in again.', 'PASSWORD_UPDATE_CONFLICT')
+  }
+  setSessionCookie(res, updatedUser._id, updatedUser.sessionVersion)
   res.status(204).end()
 })
 
