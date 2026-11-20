@@ -202,7 +202,6 @@ export default function AuthPage({
               ? <>Remembered it? <button type="button" onClick={() => onNavigate('login')}>Back to sign in</button></>
               : <>New to Plenqora? <button type="button" onClick={() => onNavigate('signup')}>Create an account</button></>}
         </div>
-        <div className="auth-security-note"><Icon name="lock" size={15} /><span>Passwords and authorization are handled by the Plenqora API. Your session is stored in a secure, HTTP-only cookie.</span></div>
       </section>
     </main>
   )
