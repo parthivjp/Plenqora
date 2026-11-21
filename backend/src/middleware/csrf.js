@@ -19,10 +19,23 @@ export function createCsrfToken(req, res) {
   return token
 }
 
+function hasTrustedOrigin(req) {
+  const origin = req.get('origin')
+  if (typeof origin !== 'string') return false
+  const allowedOrigins = (process.env.FRONTEND_ORIGIN || 'http://localhost:5173')
+    .split(',')
+    .map((allowedOrigin) => allowedOrigin.trim())
+    .filter(Boolean)
+  return allowedOrigins.includes(origin)
+}
+
 export default function csrfProtection(req, res, next) {
   if (!unsafeMethods.has(req.method)) return next()
   const cookieToken = req.cookies?.plenqora_csrf
   const headerToken = req.get('x-csrf-token')
+  if (typeof headerToken === 'string' && headerToken.length > 0 && hasTrustedOrigin(req)) {
+    return next()
+  }
   if (
     typeof cookieToken !== 'string'
     || typeof headerToken !== 'string'
