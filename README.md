@@ -41,10 +41,10 @@ Plenqora is a React project-management workspace backed by an Express/Mongoose A
 
 - Configure the Vercel project root directory as `frontend`, with `npm run build` as the build command and `dist` as the output directory. `frontend/vercel.json` rewrites client routes such as `/login` to `index.html`, so refreshing those routes loads the SPA.
 - In Vercel project settings, set `VITE_API_URL` to `https://plenqora.onrender.com` for Production (and Preview too, if preview deployments should use this API). The frontend appends `/api` to this origin for all API and CSRF requests. Do not include a trailing slash or `/api`.
-- In the Render backend service settings, set `NODE_ENV=production`, `FRONTEND_ORIGIN=https://plenqora.vercel.app`, and `COOKIE_SAME_SITE=none`. `FRONTEND_ORIGIN` must exactly match the browser's frontend origin, including scheme and without a trailing slash; add comma-separated origins if using additional frontend domains.
+- In the Render backend service settings, set `NODE_ENV=production` and `FRONTEND_ORIGIN=https://plenqora.vercel.app`. `FRONTEND_ORIGIN` must exactly match the browser's frontend origin, including scheme and without a trailing slash; add comma-separated origins if using additional frontend domains. Cross-site production cookies default to `SameSite=None; Secure`; you can set `COOKIE_SAME_SITE=none` explicitly if preferred.
 - The API trusts one proxy hop for Render's forwarded client IP, which lets `express-rate-limit` identify clients without trusting arbitrary forwarded addresses.
 - Authenticated Server-Sent Events notify connected workspace members after successful changes, and clients reload the updated workspace data without a page refresh. The in-memory event broadcaster assumes a single backend instance; use shared pub/sub before scaling the API horizontally.
-- Keep `JWT_SECRET` and `MONGODB_URI` configured privately in Render. The backend already enables credentialed CORS for `FRONTEND_ORIGIN` and marks cookies `Secure` in production; `COOKIE_SAME_SITE=none` allows the session and CSRF cookies on cross-site frontend-to-API requests.
+- Keep `JWT_SECRET` and `MONGODB_URI` configured privately in Render. The backend already enables credentialed CORS for `FRONTEND_ORIGIN` and marks cookies `Secure` in production; the production cookie default allows the session and CSRF cookies on cross-site frontend-to-API requests.
 - After changing Vercel's `VITE_API_URL`, trigger a new frontend deployment because Vite embeds it at build time. Confirm `https://plenqora.onrender.com/api/health` reports a connected database, then refresh `https://plenqora.vercel.app/login`.
 
 ## Accounts, invitations, and email
@@ -55,7 +55,7 @@ Plenqora is a React project-management workspace backed by an Express/Mongoose A
 - Password recovery sends email only when Brevo is configured. In local development without email settings, the UI explicitly says that no email was sent and provides a one-time reset link for a registered account. Production returns a delivery/configuration error rather than claiming that an email was sent.
 - For Render, configure `BREVO_API_KEY` and `BREVO_FROM` in the backend service environment. `BREVO_FROM` must be a sender address authorized and verified in Brevo. Email is sent over Brevo's HTTPS Transactional Email API; SMTP credentials are not used.
 - Workspace roles are `Admin`, `Manager`, `Developer`, and `Viewer`. Project and issue permissions are checked by API middleware/controllers, not only hidden in the UI.
-- For a cross-site production deployment, set `FRONTEND_ORIGIN` to the exact frontend origin and configure HTTPS plus `COOKIE_SAME_SITE=none`. Keep the JWT secret private and rotate it if compromised.
+- For a cross-site production deployment, set `FRONTEND_ORIGIN` to the exact frontend origin and configure HTTPS. Production cookies default to `SameSite=None; Secure`. Keep the JWT secret private and rotate it if compromised.
 
 ## API and data
 

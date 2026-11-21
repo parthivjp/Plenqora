@@ -4,7 +4,7 @@ import ApiError from '../utils/ApiError.js'
 const unsafeMethods = new Set(['POST', 'PUT', 'PATCH', 'DELETE'])
 
 export function cookieSettings() {
-  const sameSite = process.env.COOKIE_SAME_SITE || 'lax'
+  const sameSite = process.env.COOKIE_SAME_SITE || (process.env.NODE_ENV === 'production' ? 'none' : 'lax')
   return {
     httpOnly: true,
     secure: process.env.NODE_ENV === 'production' || sameSite === 'none',
